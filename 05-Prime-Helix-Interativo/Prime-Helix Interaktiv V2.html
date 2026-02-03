@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Prim-Helix – Direkter Manipulator</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif; margin: 0; background: #0b0e12; color: #e7e7ea; overflow: hidden; }
+  .plot-container { position: relative; width: 100vw; height: 100vh; }
+  .controls-overlay { position: absolute; top: 10px; right: 10px; z-index: 100; }
+  .instructions { position: absolute; bottom: 10px; left: 10px; z-index: 100; padding: 8px 12px; background: rgba(15, 19, 25, 0.8); border-radius: 8px; font-size: 14px; border: 1px solid #333; }
+  button { cursor: pointer; background: #253045; border: 0; color: white; padding: 8px 12px; border-radius: 8px; }
+  b { color: #9db2ff; }
+</style>
+</head>
+<body>
+
+<div id="plot" class="plot-container"></div>
+
+<div class="controls-overlay">
+  <button id="resetBtn">Standardwerte</button>
+</div>
+
+<div class="instructions">
+  <b>Halten & Scrollen:</b><br>
+  [Shift] + Mausrad = <b>Radius</b> ändern<br>
+  [Ctrl] + Mausrad = <b>Winkel (ω)</b> ändern<br>
+  [Alt] + Mausrad = <b>Steigung (κ)</b> ändern
+</div>
+
+<script>
+// --- Globale, manipulierbare Parameter ---
+let r, omega, kappa;
+const N = 100; // Feste Anzahl an Primzahlen für die Darstellung
+
+// --- Primcode-Generator (ohne Sieb) ---
+function isPrimeTrial(n){
+  if(n<2) return false;
+  if(n%2===0) return n===2;
+  if(n%3===0) return n===3;
+  for(let i=5;i*i<=n;i+=6){
+    if(n%i===0 || n%(i+2)===0) return false;
+  }
+  return true;
+}
+function primesByDelta(count){
+  const primes=[];
+  let n=1;
+  let f_n = 0;
+  while(primes.length < count){
+    n += 1;
+    const isP = isPrimeTrial(n) ? 1 : 0;
+    const delta = isP - f_n;
+    if(delta === 1){
+      primes.push(n);
+    }
+    f_n = isP;
+  }
+  return primes;
+}
+
+const primes = primesByDelta(N);
+const K = primes.length;
+const kVals = [...Array(K).keys()].map(i=>i+1);
+
+// --- Kernfunktionen für die Visualisierung ---
+function helix(t_values, w, k, rad){
+  const x = t_values.map(v => rad * Math.cos(w * v));
+  const y = t_values.map(v => rad * Math.sin(w * v));
+  const z = t_values.map(v => k * v);
+  return {x,y,z};
+}
+
+function computeAndPlot(){
+  const t_cont = []; const steps_cont = Math.max(1200, 50 * K);
+  for(let i = 0; i <= steps_cont; i++){ t_cont.push(K * i / steps_cont); }
+  const H_cont = helix(t_cont, omega, kappa, r);
+
+  const HP_vals = helix(kVals, omega, kappa, r);
+
+  const traces = [{
+    type: 'scatter3d', mode: 'lines',
+    x: H_cont.x, y: H_cont.y, z: H_cont.z,
+    line: { width: 4, color: 'rgb(224,173,65)' },
+    name: 'Kontinuierliche Kurve',
+    hoverinfo: 'none'
+  }, {
+    type: 'scatter3d', mode: 'markers',
+    x: HP_vals.x, y: HP_vals.y, z: HP_vals.z,
+    marker: { size: 5, color: 'rgb(255, 255, 255)', symbol: 'circle' },
+    name: 'Prim-Punkte',
+    hovertemplate: '<b>Primzahl: %{customdata[0]}</b><br>Index k: %{customdata[1]}<extra></extra>',
+    customdata: primes.map((p, idx) => [p, idx + 1])
+  }];
+
+  const layout = {
+    paper_bgcolor: '#0b0e12',
+    plot_bgcolor: '#0b0e12',
+    scene: {
+      xaxis: { title: 'x', gridcolor: '#1b2432', zerolinecolor: '#1b2432', color: '#cfd3da', showbackground: false },
+      yaxis: { title: 'y', gridcolor: '#1b2432', zerolinecolor: '#1b2432', color: '#cfd3da', showbackground: false },
+      zaxis: { title: 'z', gridcolor: '#1b2432', zerolinecolor: '#1b2432', color: '#cfd3da', showbackground: false },
+      aspectmode: 'data',
+    },
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    showlegend: false,
+    hoverlabel: { bgcolor: '#2a66ff', font: { color: 'white' } },
+    // ANNOTATION: Zeigt die aktuellen Parameterwerte direkt im Bild an
+    annotations: [{
+      x: 0.05, y: 0.95,
+      xref: 'paper', yref: 'paper',
+      text: `r: ${r.toFixed(2)} | ω: ${omega.toFixed(2)} | κ: ${kappa.toFixed(2)}`,
+      showarrow: false,
+      font: { color: '#9aa3ad', size: 14 }
+    }]
+  };
+  Plotly.newPlot('plot', traces, layout, { responsive: true });
+}
+
+// --- Interaktionslogik ---
+function setDefaults(){
+  r = 1.0;
+  omega = 1.2;
+  kappa = 0.4;
+}
+
+function handleMouseWheel(event){
+  // Verhindert das Scrollen der Seite und das Standard-Zoom-Verhalten von Plotly, wenn eine Taste gedrückt wird
+  if(event.shiftKey || event.ctrlKey || event.altKey){
+    event.preventDefault();
+  }
+
+  const scrollDirection = event.deltaY < 0 ? 1 : -1;
+
+  if(event.shiftKey){ // Radius ändern
+    r += scrollDirection * 0.05;
+    r = Math.max(0.1, r); // Verhindert einen negativen Radius
+  } else if(event.ctrlKey){ // Winkel (ω) ändern
+    omega += scrollDirection * 0.05;
+  } else if(event.altKey){ // Steigung (κ) ändern
+    kappa += scrollDirection * 0.05;
+  } else {
+    return; // Wenn keine Taste gedrückt ist, wird das Standard-Zoom von Plotly verwendet
+  }
+
+  computeAndPlot(); // Neuzeichnen mit den aktualisierten Parametern
+}
+
+// --- Initialisierung ---
+const plotDiv = document.getElementById('plot');
+plotDiv.addEventListener('wheel', handleMouseWheel);
+document.getElementById('resetBtn').addEventListener('click', () => {
+  setDefaults();
+  computeAndPlot();
+});
+
+setDefaults();
+computeAndPlot();
+
+</script>
+</body>
+</html>

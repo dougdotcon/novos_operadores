@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Prim-Helix – Interaktiver Viewer (Primcode Δf(n)) — Touch+</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;margin:0;background:#0b0e12;color:#e7e7ea}
+  header{padding:14px 16px;border-bottom:1px solid #222;background:#0f1319}
+  h1{font-size:18px;margin:0}
+  .wrap{display:flex;flex-wrap:wrap}
+  .controls{flex:1 1 320px;padding:12px 16px;border-right:1px solid #222}
+  .plot{flex:3 1 520px;min-height:68vh;position:relative}
+  fieldset{border:1px solid #333;border-radius:8px;margin:8px 0;padding:8px 10px}
+  legend{padding:0 6px;color:#9db2ff}
+  label{display:block;margin:6px 0 2px;color:#b8c0cc}
+  input[type="number"],input[type="text"],select{width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#121722;color:#e7e7ea}
+  input[type="range"]{width:100%}
+  .row{display:flex;gap:8px}
+  .row>div{flex:1}
+  button{cursor:pointer;background:#2a66ff;border:0;color:white;padding:8px 12px;border-radius:8px;margin-top:10px}
+  button.secondary{background:#253045}
+  .muted{color:#9aa3ad;font-size:12px;margin-top:6px}
+  code{background:#121722;padding:2px 4px;border-radius:4px}
+  #plot{touch-action:none;}
+  #hud{
+    position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+    background:#10151f;color:#e7e7ea;border:1px solid #283447;border-radius:12px;
+    padding:8px 12px;font:12px/1.4 ui-monospace,Consolas,Menlo,monospace;pointer-events:auto;
+    opacity:0;transition:opacity .15s ease, transform .15s ease;
+    max-width:94vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:10px;align-items:center;
+  }
+  #hud .btn{background:#182131;border:1px solid #253045;color:#e7e7ea;border-radius:8px;padding:6px 8px;cursor:pointer}
+  #hud .btn:active{transform:scale(.98)}
+</style>
+</head>
+<body>
+<header><h1>Prim-Helix – Interaktiver Viewer (A: Index • B: Konversion • C: Monoton) — Generator: Primcode Δf(n) · Touch+</h1></header>
+<div class="wrap">
+  <div class="controls">
+    <fieldset>
+      <legend>Modus</legend>
+      <label for="mode">Darstellung</label>
+      <select id="mode">
+        <option value="A">A) Index-basierte Helix</option>
+        <option value="B">B) Konversion (k → k-1)</option>
+        <option value="C">C) Monotone Prim-Helix</option>
+      </select>
+      <div class="muted">
+        Primzahlen werden ohne Sieb erzeugt: <code>f(n)=1</code> (prim), <code>0</code> sonst; <code>Δf(n)=f(n+1)-f(n)</code>.
+        Primindex ist die Position mit <code>f(n)=1</code> (bzw. <code>Δf=+1</code> als Beginn).
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Parameter</legend>
+      <div class="row">
+        <div><label>Radius r</label><input id="r" type="number" step="0.01" value="1.0"></div>
+        <div><label>Ω / ω</label><input id="omega" type="number" step="0.1" value="1.2"></div>
+        <div><label>h / κ</label><input id="kappa" type="number" step="0.1" value="0.40"></div>
+      </div>
+      <div class="row">
+        <div><label>Anzahl Primzahlen N</label><input id="N" type="number" step="1" value="100"></div>
+        <div><label>Opazität Grund-Helix</label><input id="alpha" type="range" min="0" max="1" step="0.05" value="0.35"></div>
+      </div>
+      <div class="muted">Tipp: Für C setze ω≈2.8, κ≈1.0 (enger & steiler). In C wird die Primzeit <code>t_k=∑ln p_j</code> benutzt.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Konversion (Modus B)</legend>
+      <div class="row">
+        <div><label>Startindex k (z. B. 39)</label><input id="kstart" type="number" step="1" value="39"></div>
+        <div><label>Teilschritte m</label><input id="m" type="number" step="1" value="6"></div>
+      </div>
+      <label><input type="checkbox" id="showFull" checked> vollständige Konversion</label>
+      <label><input type="checkbox" id="showStepped" checked> getaktete Konversion</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Eigene Primliste (optional)</legend>
+      <label>Kommagetrennte Primzahlen</label>
+      <input id="customPrimes" type="text" placeholder="leer lassen = durch Primcode Δf(n) erzeugen">
+      <div class="muted">Wenn gefüllt, wird diese Liste verwendet. Sonst generiert der Primcode Δf(n) die ersten N Primzahlen (ohne Sieb).</div>
+    </fieldset>
+
+    <button id="plotBtn">Neu berechnen & zeichnen</button>
+    <button id="resetBtn" class="secondary">Standardwerte</button>
+  </div>
+
+  <div id="plot" class="plot"></div>
+</div>
+
+<div id="hud"><div id="hudText"></div><button id="copyBtn" class="btn">kopieren</button></div>
+
+<script>
+// --- Primcode-Generator (ohne Sieb) ---
+function isPrimeTrial(n){
+  if(n<2) return false;
+  if(n%2===0) return n===2;
+  if(n%3===0) return n===3;
+  for(let i=5;i*i<=n;i+=6){
+    if(n%i===0 || n%(i+2)===0) return false;
+  }
+  return true;
+}
+function primesByDelta(N){
+  const primes=[];
+  let n=1;
+  let f_n = 0;          // f(1)=0
+  while(primes.length < N){
+    const isP = isPrimeTrial(n+1) ? 1 : 0; // f(n+1)
+    const delta = isP - f_n;               // Δf(n) = f(n+1)-f(n)
+    if(delta === 1){ primes.push(n+1); }   // Beginn der Aktivität
+    f_n = isP;
+    n += 1;
+  }
+  return primes;
+}
+function parseCustomPrimes(text){
+  if(!text) return null;
+  const arr = text.split(/[,;\s]+/).filter(x=>x.length).map(x=>parseInt(x,10)).filter(x=>Number.isFinite(x) && x>1);
+  if(arr.length===0) return null;
+  function isPrime(n){ if(n<2) return false; if(n%2===0) return n===2; if(n%3===0) return n===3; for(let i=5;i*i<=n;i+=6){ if(n%i===0||n%(i+2)===0) return false;} return true;}
+  return arr.every(isPrime) ? arr : null;
+}
+function buildCumLn(primes){
+  const t=[]; let acc=0;
+  for(let i=0;i<primes.length;i++){ acc+=Math.log(primes[i]); t.push(acc); }
+  return t;
+}
+
+// --- HUD helpers ---
+const hud = document.getElementById('hud');
+const hudText = document.getElementById('hudText');
+document.getElementById('copyBtn').onclick = ()=>{
+  const text = hudText.textContent;
+  if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
+  if(navigator.vibrate) navigator.vibrate(12);
+};
+function showHUD(msg){ hudText.textContent = msg; hud.style.opacity = 1; }
+function hideHUD(){ hud.style.opacity = 0; }
+
+function computeAndPlot(){
+  const mode = document.getElementById('mode').value;
+  const r    = parseFloat(document.getElementById('r').value);
+  const omg  = parseFloat(document.getElementById('omega').value);
+  const kap  = parseFloat(document.getElementById('kappa').value);
+  const N    = parseInt(document.getElementById('N').value,10);
+  const alpha= parseFloat(document.getElementById('alpha').value);
+  const kstart = parseInt(document.getElementById('kstart').value,10);
+  const m      = parseInt(document.getElementById('m').value,10);
+  const custom = parseCustomPrimes(document.getElementById('customPrimes').value);
+  const primes = custom || primesByDelta(N);
+  const K = primes.length;
+  const kVals = [...Array(K).keys()].map(i=>i+1);
+  const tArr  = buildCumLn(primes); // Primzeit
+
+  // Hilfsfunktion: Helix
+  function helix(t, omega, kappa, r){
+    const x = t.map(v => r*Math.cos(omega*v));
+    const y = t.map(v => r*Math.sin(omega*v));
+    const z = t.map(v => kappa*v);
+    return {x,y,z};
+  }
+
+  let traces=[];
+  if(mode==='A' || mode==='B'){
+    const Omega = omg, h = kap;
+    const t = []; const steps = Math.max(1200, 50*K);
+    for(let i=0;i<=steps;i++){ t.push(K*i/steps); }
+    const H = helix(t, Omega, h, r);
+    traces.push({type:'scatter3d', mode:'lines',
+      x:H.x, y:H.y, z:H.z,
+      line:{width:3, color:'rgb(224,173,65)', opacity:(mode==='B'?alpha:0.9)},
+      name:(mode==='B'?'Grund-Helix':'Kontinuierliche Kurve (Index)')
+    });
+    const HP = helix(kVals, Omega, h, r);
+    const cd = kVals.map((kv,i)=>({k:kv,p:primes[i],t:tArr[i]}));
+    traces.push({type:'scatter3d', mode:'markers',
+      x:HP.x, y:HP.y, z:HP.z,
+      marker:{size:4, color:'rgb(140,88,44)'},
+      name:'Prim-Punkte (aus Δf)',
+      customdata: cd,
+      hovertemplate:'k=%{customdata.k} · p=%{customdata.p} · t=%{customdata.t:.6f}<extra></extra>'
+    });
+
+    if(mode==='B'){
+      const ks = Math.min(Math.max(2,kstart), K);
+      const ke = ks-1;
+      const tf=[]; const steps2=200;
+      for(let i=0;i<=steps2;i++){ tf.push( ks - (ks-ke)*i/steps2 ); }
+      const HF = helix(tf, Omega, h, r);
+      traces.push({type:'scatter3d', mode:'lines',
+        x:HF.x, y:HF.y, z:HF.z,
+        line:{width:6, color:'rgb(53,110,245)'},
+        name:'Vollständige Konversion'
+      });
+      const tt=[]; for(let i=0;i<=m;i++){ tt.push( ks - (i*(ks-ke)/m) );}
+      const HT = helix(tt, Omega, h, r);
+      traces.push({type:'scatter3d', mode:'lines+markers',
+        x:HT.x, y:HT.y, z:HT.z,
+        line:{width:5, color:'rgb(112,185,255)'},
+        marker:{size:4, color:'rgb(112,185,255)'},
+        name:`Getaktete Konversion (${m})`
+      });
+    }
+  }
+
+  if(mode==='C'){
+    const omega = omg, kappa = kap;
+    // kontinuierliche Kurve über echter Primzeit
+    const TMAX = tArr[tArr.length-1];
+    const t = []; const steps = Math.max(1200, 50*K);
+    for(let i=0;i<=steps;i++){ t.push(TMAX*i/steps); }
+    const H = helix(t, omega, kappa, r);
+    traces.push({type:'scatter3d', mode:'lines',
+      x:H.x, y:H.y, z:H.z,
+      line:{width:3, color:'rgb(224,173,65)'},
+      name:'Kontinuierliche Helix Γ(t)'
+    });
+    // Primpunkte bei t_k
+    const HP = helix(tArr, omega, kappa, r);
+    const cd = kVals.map((kv,i)=>({k:kv,p:primes[i],t:tArr[i]}));
+    traces.push({type:'scatter3d', mode:'markers',
+      x:HP.x, y:HP.y, z:HP.z,
+      marker:{size:4, color:'rgb(140,88,44)'},
+      name:'Prim-Punkte p_k (aus Δf)',
+      customdata: cd,
+      hovertemplate:'k=%{customdata.k} · p=%{customdata.p} · t=%{customdata.t:.6f}<extra></extra>'
+    });
+  }
+
+  const layout = {
+    paper_bgcolor:'#0b0e12', plot_bgcolor:'#0b0e12',
+    scene:{
+      xaxis:{title:'x', gridcolor:'#1b2432', zerolinecolor:'#1b2432', color:'#cfd3da'},
+      yaxis:{title:'y', gridcolor:'#1b2432', zerolinecolor:'#1b2432', color:'#cfd3da'},
+      zaxis:{title:'z', gridcolor:'#1b2432', zerolinecolor:'#1b2432', color:'#cfd3da'},
+      aspectmode:'data',
+      dragmode:'orbit'
+    },
+    margin:{l:0,r:0,t:30,b:0},
+    showlegend:true,
+    legend:{font:{color:'#cfd3da'}}
+  };
+  const config = {
+    responsive:true,
+    scrollZoom:true,
+    displayModeBar:true,
+    doubleClick:'reset',
+    modeBarButtonsToRemove:['select2d','lasso2d']
+  };
+
+  Plotly.newPlot('plot', traces, layout, config).then(gd=>{
+    // Tap-to-inspect: zeigt HUD mit k, p, t und Koordinaten
+    gd.on('plotly_click', (ev)=>{
+      const pt = ev.points && ev.points[0];
+      if(!pt || !pt.customdata){ hideHUD(); return; }
+      const cd = pt.customdata;
+      const x = pt.x, y = pt.y, z = pt.z;
+      const msg = `k=${cd.k} · p=${cd.p} · t=${cd.t.toFixed(9)} · x=${x.toFixed(6)} · y=${y.toFixed(6)} · z=${z.toFixed(6)}`;
+      showHUD(msg);
+      if(navigator.vibrate) navigator.vibrate(8);
+    });
+    gd.on('plotly_doubleclick', ()=>{ hideHUD(); });
+  });
+}
+
+function setDefaults(){
+  document.getElementById('mode').value = 'A';
+  document.getElementById('r').value = '1.0';
+  document.getElementById('omega').value = '1.2';
+  document.getElementById('kappa').value = '0.40';
+  document.getElementById('N').value = '100';
+  document.getElementById('alpha').value = '0.35';
+  document.getElementById('kstart').value = '39';
+  document.getElementById('m').value = '6';
+  document.getElementById('customPrimes').value = '';
+}
+
+document.getElementById('plotBtn').addEventListener('click', computeAndPlot, {passive:true});
+document.getElementById('resetBtn').addEventListener('click', ()=>{ setDefaults(); computeAndPlot(); }, {passive:true});
+
+setDefaults();
+computeAndPlot();
+</script>
+</body>
+</html>

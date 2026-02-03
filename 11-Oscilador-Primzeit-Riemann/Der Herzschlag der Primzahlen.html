@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Der Herzschlag der Primzahlen</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; color: #333; padding: 15px; margin: 0; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 20px; max-width: 800px; margin: 0 auto; }
+        h1 { color: #2c3e50; margin-top: 0; font-size: 1.5rem; text-align: center; }
+        p { font-size: 0.9rem; color: #666; text-align: center; margin-bottom: 20px; }
+        
+        .controls { display: grid; gap: 15px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; }
+        label { font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 5px; }
+        input[type=range] { width: 100%; display: block; }
+        .val-display { float: right; color: #007bff; }
+
+        #plot { width: 100%; height: 400px; border: 1px solid #eee; border-radius: 4px; }
+        
+        .list-container { margin-top: 20px; max-height: 300px; overflow-y: auto; border-top: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; position: sticky; top: 0; }
+        .highlight { color: #d32f2f; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>Der Herzschlag der Primzahlen</h1>
+    <p>Visualisierung der Resonanz $Z(t)$ entlang der Primzeit-Achse.</p>
+
+    <div class="controls">
+        <div>
+            <label>Anzahl Primzahlen (Zeitachse): <span id="lbl-primes" class="val-display">150</span></label>
+            <input type="range" id="sld-primes" min="50" max="500" step="10" value="150" oninput="update()">
+        </div>
+        <div>
+            <label>Anzahl Nullstellen (Interferenz): <span id="lbl-zeros" class="val-display">30</span></label>
+            <input type="range" id="sld-zeros" min="1" max="30" step="1" value="30" oninput="update()">
+        </div>
+    </div>
+
+    <div id="plot"></div>
+
+    <h3>Top Zitter-Peaks (Stärkste Resonanz)</h3>
+    <div class="list-container">
+        <table id="peak-table">
+            <thead>
+                <tr><th>Rang</th><th>n</th><th>Primzahl</th><th>Stärke Z(t)</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Die echten Riemann-Nullstellen (Imaginärteile), exakt aus deinem Python-Skript
+    const allZeros = [
+        14.134725141, 21.022039639, 25.010857580, 30.424876125, 32.935061588, 37.586178159,
+        40.918719012, 43.327073281, 48.005150881, 49.773832478, 52.970321478, 56.446247697,
+        59.347044003, 60.831778525, 65.112544048, 67.079810529, 69.546401711, 72.067157674,
+        75.704690699, 77.144840069, 79.337375020, 82.910380854, 84.735492981, 87.425274613,
+        88.809111208, 92.491899271, 94.651344041, 95.870634228, 98.831194218, 101.317851006
+    ];
+
+    // Primzahlen Sieb
+    function getPrimes(limitCount) {
+        // Grobe Oberschranke n log n
+        let limit = Math.floor(limitCount * (Math.log(limitCount) + 2)) + 20;
+        let sieve = new Uint8Array(limit).fill(1);
+        sieve[0] = 0; sieve[1] = 0;
+        let primes = [];
+        
+        for (let i = 2; i < limit; i++) {
+            if (sieve[i]) {
+                primes.push(i);
+                if (primes.length >= limitCount) break;
+                for (let j = i * i; j < limit; j += i) sieve[j] = 0;
+            }
+        }
+        return primes;
+    }
+
+    function update() {
+        const nPrimes = parseInt(document.getElementById('sld-primes').value);
+        const nZeros = parseInt(document.getElementById('sld-zeros').value);
+
+        document.getElementById('lbl-primes').innerText = nPrimes;
+        document.getElementById('lbl-zeros').innerText = nZeros;
+
+        // 1. Daten vorbereiten
+        const primes = getPrimes(nPrimes);
+        const zerosSubset = allZeros.slice(0, nZeros);
+        
+        let t_values = []; // Primzeit
+        let z_values = []; // Signal
+        let indices = [];  // n
+        
+        let current_t = 0;
+
+        // Berechnung
+        for(let i=0; i<primes.length; i++) {
+            let p = primes[i];
+            current_t += Math.log(p); // Primzeit t_n
+            
+            // Z(t) = Sum cos(gamma * t)
+            let sum = 0;
+            for(let z of zerosSubset) {
+                sum += Math.cos(z * current_t);
+            }
+            
+            t_values.push(current_t);
+            z_values.push(sum);
+            indices.push(i+1);
+        }
+
+        // 2. Peaks finden (für die Liste)
+        // Wir mappen die Daten, um sie sortieren zu können
+        let dataObjects = indices.map((idx, i) => ({
+            n: idx,
+            p: primes[i],
+            t: t_values[i],
+            z: z_values[i],
+            absZ: Math.abs(z_values[i])
+        }));
+
+        // Sortieren nach Stärke (Absolutwert)
+        dataObjects.sort((a, b) => b.absZ - a.absZ);
+
+        // 3. Plotten
+        // Rauschgrenze (Erwartungswert für Zufall: sqrt(N/2))
+        // Bei Cosinus Summen ist es eher sqrt(N_ZEROS/2)
+        let noise = Math.sqrt(nZeros / 2);
+
+        let traceSignal = {
+            x: indices,
+            y: z_values,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Z(t)',
+            line: { color: '#2c3e50', width: 1 },
+            marker: { size: 4 }
+        };
+
+        // Top Peaks im Plot markieren (die Top 5)
+        let top5 = dataObjects.slice(0, 5);
+        let tracePeaks = {
+            x: top5.map(d => d.n),
+            y: top5.map(d => d.z),
+            mode: 'markers',
+            name: 'Max Resonanz',
+            marker: { color: 'red', size: 10, symbol: 'x-open', line: {width: 2} }
+        };
+
+        let layout = {
+            margin: { t: 30, b: 40, l: 40, r: 10 },
+            xaxis: { title: 'Index n' },
+            yaxis: { title: 'Interferenz Z(t)' },
+            shapes: [
+                // Rauschband (+/-)
+                { type: 'line', x0: 0, x1: nPrimes, y0: noise, y1: noise, line: { color: 'green', width: 1, dash: 'dot' } },
+                { type: 'line', x0: 0, x1: nPrimes, y0: -noise, y1: -noise, line: { color: 'green', width: 1, dash: 'dot' } }
+            ],
+            showlegend: false
+        };
+
+        Plotly.newPlot('plot', [traceSignal, tracePeaks], layout, {staticPlot: false, responsive: true});
+
+        // 4. Tabelle füllen
+        const tbody = document.querySelector('#peak-table tbody');
+        tbody.innerHTML = '';
+        
+        // Zeige Top 20
+        for(let i=0; i<Math.min(20, dataObjects.length); i++) {
+            let row = dataObjects[i];
+            let tr = document.createElement('tr');
+            // Hebe hervor, wenn Z deutlich über dem Rauschen liegt (> 2*Noise)
+            let isStrong = row.absZ > (2 * noise);
+            let valClass = isStrong ? 'highlight' : '';
+            
+            tr.innerHTML = `
+                <td>${i+1}</td>
+                <td>${row.n}</td>
+                <td>${row.p}</td>
+                <td class="${valClass}">${row.z.toFixed(3)}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
+    // Initialer Aufruf
+    update();
+</script>
+
+</body>
+</html>

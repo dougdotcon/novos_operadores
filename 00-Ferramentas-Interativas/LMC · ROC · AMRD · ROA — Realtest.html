@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMC · ROC · AMRD · ROA — Realtest</title>
+    <style>
+        body {
+            margin: 0;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        h1 { 
+            margin: 8px 0 4px 0; 
+            font-size: 1.4rem; 
+            letter-spacing: -0.5px; 
+            text-align: center;
+        }
+        
+        .subtitle { 
+            margin: 0 0 8px 0; 
+            color: #666; 
+            font-size: 0.75rem; 
+            text-align: center;
+        }
+
+        .canvas-container {
+            position: relative;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+            border-radius: 50%;
+            border: 2px solid #333;
+            background: #111;
+        }
+
+        canvas {
+            border-radius: 50%;
+            display: block;
+            max-width: 85vw;
+            max-height: 45vh;
+        }
+
+        .controls {
+            margin-top: 12px;
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            width: 95%;
+            max-width: 950px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .control-group { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 3px; 
+        }
+        
+        label { 
+            font-size: 0.55rem; 
+            font-weight: bold; 
+            color: #888; 
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #2563eb;
+        }
+
+        .fault-section {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 5px;
+            padding-top: 10px;
+            border-top: 1px solid #444;
+        }
+
+        .fault-box {
+            background: #222;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        .fault-box.stress {
+            background: #1a0f0f;
+            border-color: #662222;
+        }
+
+        .fault-box.stress.active {
+            background: #330000;
+            border-color: #ff0000;
+            animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 5px #ff0000; }
+            50% { box-shadow: 0 0 20px #ff0000; }
+        }
+
+        .fault-title {
+            font-size: 0.7rem;
+            color: #aaa;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #444;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #ef4444;
+        }
+
+        input:checked + .slider.stress-slider {
+            background-color: #dc2626;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        .status-led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            display: inline-block;
+        }
+
+        .status-led.warning {
+            background: #f59e0b;
+            animation: blink 0.5s infinite;
+        }
+
+        .status-led.critical {
+            background: #ef4444;
+            animation: blink 0.2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .buttons {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        button:hover { background: #1d4ed8; }
+        button.secondary { background: #374151; }
+        button.danger { background: #dc2626; }
+
+        .info-panel {
+            margin-top: 8px;
+            padding: 10px;
+            background: #0f0f0f;
+            border-radius: 8px;
+            border: 1px solid #222;
+            font-size: 0.65rem;
+            color: #666;
+            max-width: 930px;
+            width: 95%;
+        }
+
+        .metric-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 6px;
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+
+        .metric-label { font-size: 0.55rem; color: #888; }
+        .metric-value { 
+            font-size: 0.9rem; 
+            font-weight: bold; 
+            color: #2563eb;
+            margin-top: 2px;
+        }
+        .metric-value.fault { color: #ef4444; animation: blink 0.5s infinite; }
+        .metric-value.warning { color: #f59e0b; }
+
+        .event-log {
+            margin-top: 8px;
+            padding: 6px;
+            background: #111;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.6rem;
+            height: 60px;
+            overflow-y: auto;
+            color: #555;
+        }
+
+        .event-log .entry { margin: 2px 0; }
+        .event-log .fault { color: #ef4444; }
+        .event-log .recover { color: #22c55e; }
+        .event-log .stress { color: #dc2626; font-weight: bold; }
+        
+        .safety-status {
+            font-size: 0.6rem;
+            font-weight: bold;
+            color: #22c55e;
+            margin-top: 4px;
+        }
+        
+        .safety-status.disabled {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>LMC · ROC · AMRD · ROA</h1>
+    <p class="subtitle">Grid-Size (100,32,32,8) | β=0.12 | α=(0.3,0.5,0.8) | γ=(0.8,1.4,2.8) | ε=0.1</p>
+
+    <div class="canvas-container">
+        <canvas id="lmcCanvas" width="600" height="600"></canvas>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label id="labelBeta">LMC β: 0.50</label>
+            <input type="range" id="inputBeta" min="0.05" max="1" step="0.01" value="0.50">
+        </div>
+        <div class="control-group">
+            <label id="labelEps">ROC ε: 0.15</label>
+            <input type="range" id="inputEps" min="0" max="0.5" step="0.01" value="0.15">
+        </div>
+        <div class="control-group">
+            <label id="labelAlpha">AMRD α: 0.40</label>
+            <input type="range" id="inputAlpha" min="0" max="1" step="0.01" value="0.40">
+        </div>
+        <div class="control-group">
+            <label id="labelROA">ROA S_max: 0.70</label>
+            <input type="range" id="inputROA" min="0" max="2" step="0.01" value="0.70">
+        </div>
+        <div class="control-group">
+            <label id="labelMaxN">Max Zustände: 200</label>
+            <input type="range" id="inputMaxN" min="10" max="800" step="10" value="200">
+        </div>
+        <div class="control-group">
+            <label id="labelExp">α_geom: 2.01</label>
+            <input type="range" id="inputExp" min="1" max="5" step="0.01" value="2.01">
+        </div>
+
+        <div class="fault-section">
+            <div class="fault-box" id="fault1-box">
+                <div class="fault-title">
+                    <span class="status-led" id="led1"></span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="fault1">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="margin-left: 8px;">NETZSTÖRUNG</span>
+                </div>
+                <div style="font-size: 0.6rem; color: #888; line-height: 1.4;">
+                    σ_vol = 0.35Hz @ 50Hz<br>
+                    Grid-(100,32,32,8)<br>
+                    ROC→Ω₀, AMRD→0.28Hz
+                </div>
+            </div>
+
+            <div class="fault-box" id="fault2-box">
+                <div class="fault-title">
+                    <span class="status-led" id="led2"></span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="fault2">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="margin-left: 8px;">PMU-FEHLALARM</span>
+                </div>
+                <div style="font-size: 0.6rem; color: #888; line-height: 1.4;">
+                    σ_noise = 0.15 p.u.<br>
+                    Synthetische Daten<br>
+                    ROA-Limit, β_eff↓
+                </div>
+            </div>
+
+            <div class="fault-box stress" id="stress-roc-box">
+                <div class="fault-title">
+                    <span class="status-led" id="led3"></span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="stressROC">
+                        <span class="slider stress-slider"></span>
+                    </label>
+                    <span style="margin-left: 8px;">ROC AUS</span>
+                </div>
+                <div style="font-size: 0.6rem; color: #888; line-height: 1.4;">
+                    Killt Ω₋ Kanäle<br>
+                    Forward/Resonant/Backward<br>
+                    <div class="safety-status" id="rocStatus">AKTIV</div>
+                </div>
+            </div>
+
+            <div class="fault-box stress" id="stress-amrd-box">
+                <div class="fault-title">
+                    <span class="status-led" id="led4"></span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="stressAMRD">
+                        <span class="slider stress-slider"></span>
+                    </label>
+                    <span style="margin-left: 8px;">AMRD AUS</span>
+                </div>
+                <div style="font-size: 0.6rem; color: #888; line-height: 1.4;">
+                    Keine Dämpfung<br>
+                    Γ = 1.0 konstant<br>
+                    <div class="safety-status" id="amrdStatus">AKTIV</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button id="btnPlay">Pause</button>
+            <button id="btnReset" class="secondary">Reset</button>
+            <button id="btnClearFault" class="danger">Störung löschen</button>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <div class="metric-row">
+            <div class="metric">
+                <div class="metric-label">|Ω⟩ Aktiv</div>
+                <div class="metric-value" id="statActive">-</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Stabilität S</div>
+                <div class="metric-value" id="statS">-</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">ROA-Faktor</div>
+                <div class="metric-value" id="statROAFactor">-</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">β_effektiv</div>
+                <div class="metric-value" id="statBetaEff">-</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Systemstatus</div>
+                <div class="metric-value" id="statStatus">OK</div>
+            </div>
+        </div>
+        <div class="event-log" id="eventLog">
+            <div class="entry">System initialisiert. Alle Sicherheiten aktiv.</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('lmcCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function logEvent(msg, type = 'normal') {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = `entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString('de-DE', {hour12:false});
+            entry.textContent = `[${timestamp}] ${msg}`;
+            log.insertBefore(entry, log.firstChild);
+            if (log.children.length > 10) log.removeChild(log.lastChild);
+        }
+        
+        // === SICHERSTELLEN DASS ALLE PARAMETER NUMBERS SIND ===
+        let params = {
+            beta: 0.50,
+            eps: 0.15,
+            alpha: 0.40,
+            roa: 0.70,
+            maxN: 200,
+            exp: 2.01
+        };
+        
+        let stressTest = {
+            rocDisabled: false,
+            amrdDisabled: false
+        };
+        
+        let faults = {
+            gridInstability: false,
+            pmuNoise: false,
+            triggerTime: 0,
+            recovered: true
+        };
+        
+        let modes = [];
+        let isAnimating = true;
+        let time = 0;
+        let simTime = 0;
+        let lastModeCount = 0;  // Für Max-N-Überwachung
+        
+        function lmcField(x, y, t) {
+            const phase = t * 0.0003;
+            const s1 = Math.sin(x * 3.5 + phase) * Math.cos(y * 2.2 - phase);
+            const s2 = Math.sin((x + y) * 2.0 + phase * 0.7);
+            const s3 = Math.cos(Math.sqrt(x*x + y*y) * 4.0 - phase * 0.5);
+            
+            let disturbance = 0;
+            if (faults.gridInstability) {
+                const faultAge = (simTime - faults.triggerTime) / 60;
+                if (faultAge >= 0 && faultAge < 10) {
+                    const freqMod = Math.sin(faultAge * 50 * Math.PI * 2) * 
+                                   (1 + 0.35 * Math.sin(faultAge * 10 * Math.PI * 2));
+                    disturbance = freqMod * Math.exp(-faultAge * 0.3);
+                }
+            }
+            
+            if (faults.pmuNoise) {
+                disturbance += (Math.random() - 0.5) * 0.3;
+            }
+            
+            return Math.tanh((s1 + s2 + s3 + disturbance) * 0.4);
+        }
+        
+        function getChannel(theta) {
+            if (stressTest.rocDisabled) {
+                return { name: 'forward', gamma: 1.0 };
+            }
+            
+            const kDotV = Math.cos(theta);
+            let effectiveEps = params.eps;
+            
+            if (faults.gridInstability && !faults.recovered) {
+                effectiveEps = 0.25;
+            }
+            
+            if (kDotV > effectiveEps) return { name: 'forward', gamma: 1.0 };
+            if (Math.abs(kDotV) <= effectiveEps) return { name: 'resonant', gamma: 0.8 };
+            return { name: 'backward', gamma: 0.0 };
+        }
+        
+        function amrdModulation(x, y, t) {
+            if (stressTest.amrdDisabled) {
+                return 1.0;
+            }
+            
+            const tField = lmcField(x, y, t);
+            const sigma = 1 + params.beta * tField;
+            const sigmaMin = 1 - params.beta;
+            const sigmaMax = 1 + params.beta;
+            
+            let Gamma = 1 - params.alpha * (sigmaMax - sigma) / (sigmaMax - sigmaMin);
+            
+            if ((faults.gridInstability || faults.pmuNoise) && !faults.recovered) {
+                Gamma *= 0.7;
+            }
+            
+            return Math.max(0, Math.min(1, Gamma));
+        }
+        
+        function computeStabilityMeasure() {
+            if (modes.length === 0) return 0;
+            let sum = 0;
+            for (const mode of modes) {
+                const x = Math.cos(mode.theta);
+                const y = Math.sin(mode.theta);
+                sum += Math.abs(lmcField(x, y, time));
+            }
+            return sum / modes.length;
+        }
+        
+        function draw(currentTime) {
+            time = currentTime;
+            simTime = time / 16.67;
+            
+            const W = canvas.width;
+            const H = canvas.height;
+            const CX = W/2, CY = H/2;
+            const R = Math.min(W,H) * 0.38;
+            
+            // Hintergrund
+            if (stressTest.rocDisabled || stressTest.amrdDisabled) {
+                ctx.fillStyle = '#2a0000';
+            } else {
+                ctx.fillStyle = (faults.gridInstability || faults.pmuNoise) ? '#1a1111' : '#111';
+            }
+            ctx.fillRect(0,0,W,H);
+            
+            // Stress-Warnung
+            if (stressTest.rocDisabled || stressTest.amrdDisabled) {
+                ctx.strokeStyle = `rgba(255,0,0,${0.5 + 0.3*Math.sin(simTime*5)})`;
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.arc(CX,CY,R*1.08,0,Math.PI*2);
+                ctx.stroke();
+            }
+            
+            // Störungs-Rand
+            if (faults.gridInstability) {
+                const faultAge = simTime - faults.triggerTime;
+                if (faultAge >= 0 && faultAge < 10) {
+                    ctx.strokeStyle = `rgba(239,68,68,${0.3*Math.sin(faultAge*10)})`;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(CX,CY,R*1.05,0,Math.PI*2);
+                    ctx.stroke();
+                }
+            }
+            
+            // === SICHERSTELLEN DASS PARAMS NUMBERS SIND ===
+            const currentBeta = Number(params.beta);
+            const currentEps = Number(params.eps);
+            const currentAlpha = Number(params.alpha);
+            const currentROA = Number(params.roa);
+            const currentMaxN = Number(params.maxN);
+            const currentExp = Number(params.exp);
+            
+            // === LMC QUELLE (mit korrektem Beta) ===
+            let effectiveBeta = currentBeta;
+            if (faults.pmuNoise) effectiveBeta *= 0.8;
+            
+            if (modes.length < currentMaxN && Math.random() < effectiveBeta * 0.3) {
+                const theta = Math.random() * 2 * Math.PI;
+                const x = Math.cos(theta), y = Math.sin(theta);
+                const tVal = Math.abs(lmcField(x,y,time));
+                const threshold = 1 - effectiveBeta;
+                
+                if (tVal >= threshold * 0.5) {
+                    const channel = getChannel(theta);
+                    if (channel.gamma > 0.001) {
+                        modes.push({ theta, birthTime: time });
+                    }
+                }
+            }
+            
+            // === ROC KILL ===
+            if (!stressTest.rocDisabled) {
+                modes = modes.filter(m => getChannel(m.theta).gamma > 0.001);
+            }
+            
+            // === MAX N HARD LIMIT (SOFORT, VOR ROA!) ===
+            let maxNTriggered = false;
+            if (modes.length > currentMaxN) {
+                modes = modes.slice(0, currentMaxN);
+                maxNTriggered = true;
+            }
+            
+            // === ROA BERECHNUNG & LIMIT ===
+            const S = computeStabilityMeasure();
+            let effectiveROA = currentROA;
+            if (faults.pmuNoise) effectiveROA *= 0.85;
+            
+            // ROA Faktor berechnen (korrigiert)
+            let roaFactor;
+            let roaTriggered = false;
+            
+            if (effectiveROA <= 0) {
+                // Sofortiger totaler Kollaps
+                roaFactor = 0;
+                modes = [];  // ALLES löschen
+                roaTriggered = true;
+            } else if (S > effectiveROA && modes.length > 0) {
+                roaFactor = effectiveROA / S;
+                const target = Math.max(0, Math.floor(modes.length * roaFactor));
+                if (target < modes.length) {
+                    modes = modes.slice(0, target);
+                    roaTriggered = true;
+                }
+            } else {
+                roaFactor = 1.0;
+            }
+            
+            // Beta effektiv für Anzeige
+            const betaEff = effectiveBeta * roaFactor;
+            
+            // === STATUS-LOGIK (mehrere Kriterien) ===
+            let status = 'OK';
+            let statusClass = '';
+            
+            // Priorität 1: ROA = 0 (totaler Kollaps)
+            if (effectiveROA <= 0) {
+                status = 'KOLLAPS';
+                statusClass = 'fault';
+            }
+            // Priorität 2: Max-N überschritten (harter Cut)
+            else if (maxNTriggered && lastModeCount >= currentMaxN * 0.95) {
+                status = 'MAX-N LIMIT';
+                statusClass = 'warning';
+            }
+            // Priorität 3: Stress-Test aktiv
+            else if (stressTest.rocDisabled || stressTest.amrdDisabled) {
+                if (S > effectiveROA * 1.5) { 
+                    status = 'KOLLAPS'; 
+                    statusClass = 'fault'; 
+                }
+                else if (S > effectiveROA) { 
+                    status = 'GRENZE'; 
+                    statusClass = 'warning'; 
+                }
+            }
+            // Priorität 4: Normale ROA-Überwachung
+            else {
+                if (S > effectiveROA * 1.2) { 
+                    status = 'KRITISCH'; 
+                    statusClass = 'fault'; 
+                    faults.recovered = false; 
+                }
+                else if (S > effectiveROA * 0.9) { 
+                    status = 'WARNUNG'; 
+                    statusClass = 'warning'; 
+                }
+                else { 
+                    faults.recovered = true; 
+                }
+            }
+            
+            // Speichern für nächsten Frame
+            lastModeCount = modes.length;
+            
+            // === RENDER ===
+            for (const mode of modes) {
+                const channel = getChannel(mode.theta);
+                const rotAngle = mode.theta + (isAnimating ? time * 0.0002 : 0);
+                
+                ctx.beginPath();
+                for (let s = 0; s <= 1.2; s += 0.025) {
+                    for (let sign of [1, -1]) {
+                        let x = s;
+                        let y = sign * Math.pow(s, currentExp);
+                        
+                        let rx = x * Math.cos(rotAngle) - y * Math.sin(rotAngle);
+                        let ry = x * Math.sin(rotAngle) + y * Math.cos(rotAngle);
+                        
+                        const tField = lmcField(rx, ry, time);
+                        const Gamma = amrdModulation(rx, ry, time);
+                        const distortion = (1 + currentBeta * tField) * Gamma * channel.gamma;
+                        
+                        rx *= distortion;
+                        ry *= distortion;
+                        
+                        const sx = CX + rx * R;
+                        const sy = CY - ry * R;
+                        
+                        if (s === 0 && sign === 1) ctx.moveTo(sx, sy);
+                        else ctx.lineTo(sx, sy);
+                    }
+                }
+                
+                const hue = (mode.theta / (2 * Math.PI)) * 360;
+                
+                if (stressTest.rocDisabled && stressTest.amrdDisabled) {
+                    ctx.strokeStyle = `hsla(${hue+60},100%,50%,0.8)`;
+                    ctx.shadowColor = '#ff0000';
+                    ctx.shadowBlur = 10;
+                } else if (channel.name === 'resonant' && faults.gridInstability) {
+                    ctx.strokeStyle = `hsla(${hue+60},100%,70%,0.6)`;
+                    ctx.shadowColor = '#f59e0b';
+                    ctx.shadowBlur = 8;
+                } else {
+                    ctx.strokeStyle = `hsla(${hue},80%,60%,0.35)`;
+                    ctx.shadowBlur = 0;
+                }
+                
+                ctx.lineWidth = (faults.pmuNoise || stressTest.amrdDisabled) ? 0.6 : 1.0;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+            
+            // Zentrum
+            ctx.beginPath();
+            ctx.arc(CX,CY,4,0,Math.PI*2);
+            ctx.fillStyle = (status==='OK') ? '#22c55e' : 
+                           (status==='WARNUNG'||status==='GRENZE'||status==='MAX-N LIMIT') ? '#f59e0b' : 
+                           '#ef4444';
+            ctx.fill();
+            
+            // === STATS (mit expliziter Number-Konvertierung) ===
+            document.getElementById('statActive').innerText = modes.length;
+            document.getElementById('statS').innerText = S.toFixed(3);
+            document.getElementById('statS').className = 'metric-value ' + statusClass;
+            
+            // ROA Faktor: immer berechnen und anzeigen
+            const roaFactorDisplay = Number(roaFactor).toFixed(3);
+            document.getElementById('statROAFactor').innerText = roaFactorDisplay;
+            
+            document.getElementById('statBetaEff').innerText = Number(betaEff).toFixed(3);
+            document.getElementById('statStatus').innerText = status;
+            document.getElementById('statStatus').className = 'metric-value ' + statusClass;
+            
+            document.getElementById('led1').className = 'status-led ' + (faults.gridInstability ? 'critical' : '');
+            document.getElementById('led2').className = 'status-led ' + (faults.pmuNoise ? 'warning' : '');
+            document.getElementById('led3').className = 'status-led ' + (stressTest.rocDisabled ? 'critical' : '');
+            document.getElementById('led4').className = 'status-led ' + (stressTest.amrdDisabled ? 'critical' : '');
+        }
+        
+        function animate(t) {
+            if (isAnimating) {
+                draw(t);
+                requestAnimationFrame(animate);
+            }
+        }
+        
+        // === UI HANDLER (mit Number-Konvertierung) ===
+        const paramMap = {
+            'inputBeta': ['beta', 'labelBeta', v => `LMC β: ${v}`],
+            'inputEps': ['eps', 'labelEps', v => `ROC ε: ${v}`],
+            'inputAlpha': ['alpha', 'labelAlpha', v => `AMRD α: ${v}`],
+            'inputROA': ['roa', 'labelROA', v => `ROA S_max: ${v}`],
+            'inputMaxN': ['maxN', 'labelMaxN', v => `Max Zustände: ${v}`],
+            'inputExp': ['exp', 'labelExp', v => `α_geom: ${v}`]
+        };
+        
+        for (const [id, [param, labelId, format]] of Object.entries(paramMap)) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    params[param] = val;
+                    document.getElementById(labelId).innerText = format(val.toFixed(2));
+                    
+                    // Debug-Log bei ROA-Änderung
+                    if (param === 'roa') {
+                        console.log('ROA geändert zu:', val, 'Typ:', typeof val);
+                    }
+                });
+            }
+        }
+        
+        document.getElementById('fault1').addEventListener('change', (e) => {
+            faults.gridInstability = e.target.checked;
+            const box = document.getElementById('fault1-box');
+            if (e.target.checked) {
+                faults.triggerTime = simTime;
+                faults.recovered = false;
+                box.style.borderColor = '#ef4444';
+                logEvent('NETZSTÖRUNG @ t=' + simTime.toFixed(1) + 's', 'fault');
+            } else {
+                box.style.borderColor = '#444';
+                faults.recovered = true;
+                logEvent('Netzstörung beseitigt', 'recover');
+            }
+        });
+        
+        document.getElementById('fault2').addEventListener('change', (e) => {
+            faults.pmuNoise = e.target.checked;
+            const box = document.getElementById('fault2-box');
+            if (e.target.checked) {
+                box.style.borderColor = '#f59e0b';
+                logEvent('PMU-FEHLALARM aktiv', 'fault');
+            } else {
+                box.style.borderColor = '#444';
+                logEvent('PMU-Störung beendet', 'recover');
+            }
+        });
+        
+        document.getElementById('stressROC').addEventListener('change', (e) => {
+            stressTest.rocDisabled = e.target.checked;
+            const box = document.getElementById('stress-roc-box');
+            const statusText = document.getElementById('rocStatus');
+            
+            if (e.target.checked) {
+                box.classList.add('active');
+                statusText.innerText = 'AUS';
+                statusText.classList.add('disabled');
+                logEvent('STRESS: ROC deaktiviert - Ω₋ Kanäle frei!', 'stress');
+            } else {
+                box.classList.remove('active');
+                statusText.innerText = 'AKTIV';
+                statusText.classList.remove('disabled');
+                logEvent('ROC wieder aktiviert', 'recover');
+            }
+        });
+        
+        document.getElementById('stressAMRD').addEventListener('change', (e) => {
+            stressTest.amrdDisabled = e.target.checked;
+            const box = document.getElementById('stress-amrd-box');
+            const statusText = document.getElementById('amrdStatus');
+            
+            if (e.target.checked) {
+                box.classList.add('active');
+                statusText.innerText = 'AUS';
+                statusText.classList.add('disabled');
+                logEvent('STRESS: AMRD deaktiviert - keine Dämpfung!', 'stress');
+            } else {
+                box.classList.remove('active');
+                statusText.innerText = 'AKTIV';
+                statusText.classList.remove('disabled');
+                logEvent('AMRD wieder aktiviert', 'recover');
+            }
+        });
+        
+        document.getElementById('btnPlay').addEventListener('click', () => {
+            isAnimating = !isAnimating;
+            document.getElementById('btnPlay').innerText = isAnimating ? 'Pause' : 'Play';
+            if (isAnimating) requestAnimationFrame(animate);
+        });
+        
+        document.getElementById('btnReset').addEventListener('click', () => {
+            modes = [];
+            lastModeCount = 0;
+            faults = { gridInstability: false, pmuNoise: false, triggerTime: 0, recovered: true };
+            stressTest = { rocDisabled: false, amrdDisabled: false };
+            
+            document.getElementById('fault1').checked = false;
+            document.getElementById('fault2').checked = false;
+            document.getElementById('stressROC').checked = false;
+            document.getElementById('stressAMRD').checked = false;
+            
+            document.getElementById('fault1-box').style.borderColor = '#444';
+            document.getElementById('fault2-box').style.borderColor = '#444';
+            document.getElementById('stress-roc-box').classList.remove('active');
+            document.getElementById('stress-amrd-box').classList.remove('active');
+            document.getElementById('rocStatus').innerText = 'AKTIV';
+            document.getElementById('rocStatus').classList.remove('disabled');
+            document.getElementById('amrdStatus').innerText = 'AKTIV';
+            document.getElementById('amrdStatus').classList.remove('disabled');
+            
+            logEvent('System-Reset durchgeführt');
+            draw(performance.now());
+        });
+        
+        document.getElementById('btnClearFault').addEventListener('click', () => {
+            faults.gridInstability = false;
+            faults.pmuNoise = false;
+            faults.recovered = true;
+            document.getElementById('fault1').checked = false;
+            document.getElementById('fault2').checked = false;
+            document.getElementById('fault1-box').style.borderColor = '#444';
+            document.getElementById('fault2-box').style.borderColor = '#444';
+            logEvent('Alle Störungen gelöscht', 'recover');
+        });
+        
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>

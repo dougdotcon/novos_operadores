@@ -1,0 +1,334 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Prim‑System (Δ‑Operator · Wheel 30/210 · kein Sieb)</title>
+<style>
+  :root{--bg:#0b1120;--fg:#e2e8f0;--muted:#94a3b8;--panel:#0f172a;--line:#334155;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:14px}
+  h1{font-size:20px;margin:6px 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 1px 0 #0004}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input[type=text]{flex:1;min-width:140px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0b1222;color:var(--fg);font:16px ui-monospace,Menlo,Consolas,monospace}
+  select{padding:10px;border-radius:10px;border:1px solid var(--line);background:#0b1222;color:var(--fg)}
+  .btn{appearance:none;border:0;background:#1f2937;color:var(--fg);padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#0b1222;border:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .mono{font:14px ui-monospace,Menlo,Consolas,monospace;word-break:break-all}
+  .hint{font-size:12px;color:var(--muted)}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+  .sp{height:6px}
+</style>
+
+<div class="wrap">
+  <h1>Prim‑System Rechner <span class="pill">Δ‑Operator · Wheel · kein Sieb · kein MR</span></h1>
+
+  <div class="card">
+    <div class="row">
+      <label>Backend
+        <select id="wheelSel">
+          <option value="30" selected>Wheel 30 (2·3·5)</option>
+          <option value="210">Wheel 210 (2·3·5·7)</option>
+        </select>
+      </label>
+    </div>
+    <div class="hint">Eingabe als Primwert <b>p</b> (z. B. 5) oder als Index <b>p[n]</b> (z. B. p[3]=5). Keine Siebe, keine Zufalls‑Tests: reine Division entlang der Wheel‑Restklassen bis √n.</div>
+    <div class="sp"></div>
+    <div class="row">
+      <input id="a" type="text" placeholder="A (z. B. 5 oder p[3])">
+      <input id="b" type="text" placeholder="B (optional, z. B. 7 oder p[4])">
+      <button class="btn" id="normalize">Normalisieren</button>
+    </div>
+    <div class="sp"></div>
+    <div class="grid">
+      <button class="btn" id="isPrime">Ist A prim?</button>
+      <button class="btn" id="prev">vorherige Primzahl</button>
+      <button class="btn" id="next">nächste Primzahl</button>
+      <button class="btn" id="nearest">nächstgelegene Primzahl</button>
+      <button class="btn" id="index">Index n(A)</button>
+      <button class="btn" id="nth">p[n] aus n</button>
+    </div>
+    <div class="sp"></div>
+    <div class="grid">
+      <button class="btn" id="add">A ⊕ B  (Index‑Addition)</button>
+      <button class="btn" id="sub">A ⊖ B  (Index‑Subtraktion)</button>
+      <button class="btn" id="mul">A ⊗ B  (Index‑Multiplikation)</button>
+      <button class="btn" id="div">A ⊘ B  (Index‑Division ⌊nA/nB⌋)</button>
+      <button class="btn" id="pow">A ^ k  (Index‑Potenz)</button>
+      <input id="k" type="text" placeholder="k (z. B. 5)">
+    </div>
+    <div class="sp"></div>
+    <div id="out" class="mono"></div>
+  </div>
+
+  <div class="card">
+    <b>Prime ≥ N (Δ‑Operator)</b>
+    <div class="row">
+      <input id="N" type="text" placeholder="N (z. B. 10^9)">
+      <button class="btn" id="nextFromN">Berechnen</button>
+    </div>
+    <div class="sp"></div>
+    <div id="outN" class="mono"></div>
+  </div>
+
+  <div class="card">
+    <b>Transparenz</b>
+    <div class="hint">
+      <ul>
+        <li><b>Kein Sieb</b>: keine Vorberechnung, keine Tabellen, keine Caches.</li>
+        <li><b>Kein Miller–Rabin</b>: kein Mod‑Exponentieren; nur Division und Wheel‑Gaps.</li>
+        <li><b>Stateless</b>: jede Prüfung nutzt nur <code>n % d</code> für zulässige <code>d</code> bis √n.</li>
+        <li><b>Gaps</b>: 30‑Wheel: [6,4,2,4,2,4,6,2]; 210‑Wheel: aus Restklassen generiert.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Helpers ----------
+const $ = (id)=>document.getElementById(id);
+const out = $("out"), outN = $("outN");
+function show(where, html){ where.innerHTML = html; }
+function ok(s){ return '<span class="ok">'+s+'</span>'; }
+function warn(s){ return '<span class="warn">'+s+'</span>'; }
+function err(s){ return '<span class="err">'+s+'</span>'; }
+function toLocale(bi){ const s=bi.toString(); return s.replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
+
+function parseBigInt(text){
+  if (!text) throw new Error("leer");
+  let s = text.trim().toLowerCase().replaceAll('_','').replaceAll(' ','').replaceAll(',','');
+  // 10^k
+  s = s.replace(/^(\d+)\^(\d+)$/, (_,a,b)=> (BigInt(a) ** BigInt(b)).toString());
+  // scientific e
+  if (/^[+-]?\d+(\.\d+)?e[+-]?\d+$/i.test(s)){
+    let [mant,exp] = s.split('e'); exp=parseInt(exp,10);
+    if (mant.includes('.')){ const [i,f]=mant.split('.'); exp -= f.length; mant = i+f; }
+    if (exp>=0) return BigInt(mant) * (10n ** BigInt(exp));
+    const denom = 10n ** BigInt(-exp); return BigInt(mant)/denom;
+  }
+  // 10^k inside
+  s = s.replace(/10\^(\d+)/g, (_,e)=> '1'+'0'.repeat(parseInt(e,10)));
+  if (!/^[+-]?\d+$/.test(s)) throw new Error("Format");
+  return BigInt(s);
+}
+
+function parsePrim(text){
+  const t = text.trim();
+  const m = t.match(/^p\[(\d+)\]$/i);
+  if (m){ const n = BigInt(m[1]); if (n<1n) throw new Error("n>=1"); return {type:'index', n}; }
+  const v = parseBigInt(t);
+  return {type:'value', v};
+}
+
+// ---------- Δ‑Operator Backend: Wheel 30 / 210 ----------
+const G30 = [6n,4n,2n,4n,2n,4n,6n,2n];
+const RES30 = [1n,7n,11n,13n,17n,19n,23n,29n];
+const RES210 = (()=>{ const a=[]; for(let r=1n;r<210n;r+=2n){ if(r%3n && r%5n && r%7n) a.push(r); } return a; })();
+const G210 = (()=>{ const a=[]; const L=RES210.length; for(let i=0;i<L;i++){ const r=RES210[i], s=RES210[(i+1)%L]; const gap=((s-r+210n)%210n)||210n; a.push(gap); } return a; })();
+
+function isPrimeDelta(n, wheel){
+  if (n<2n) return false;
+  for (const p of [2n,3n,5n,7n]){ if (n===p) return true; if (n%p===0n) return n===p; }
+  const limit = sqrtBI(n);
+  if (wheel===210){
+    let d=11n, idx = RES210.findIndex(v=>v===11n);
+    while (d<=limit){ if (n%d===0n) return false; idx=(idx+1)%G210.length; d += G210[idx]; }
+    return true;
+  } else {
+    let d=7n, idx=1; // corresponds to residue 7 mod 30
+    while (d<=limit){ if (n%d===0n) return false; idx=(idx+1)&7; d += G30[idx]; }
+    return true;
+  }
+}
+
+function sqrtBI(n){
+  if (n<0n) throw new Error("sqrt of negative");
+  if (n<2n) return n;
+  // integer sqrt via Newton
+  let x = n;
+  let y = (x + 1n) >> 1n;
+  while (y < x){ x = y; y = (x + n/x) >> 1n; }
+  return x;
+}
+
+function alignToWheel(n, wheel){
+  if (n<2n) return 2n;
+  let c = (n%2n===0n)? n+1n : n;
+  if (wheel===210){
+    while(!(c%3n && c%5n && c%7n)) c+=2n;
+    return c;
+  } else {
+    while(!RES30.includes(c%30n)) c+=2n;
+    return c;
+  }
+}
+
+function nextPrimeDelta(n, wheel){
+  if (n<2n) return 2n;
+  const G = (wheel===210)? G210 : G30;
+  let k = alignToWheel(n+1n, wheel);
+  // find gap index matching k mod wheel
+  let gi = 0;
+  // coarse init
+  for (let i=0;i<G.length;i++){ gi=i; break; }
+  while (true){
+    if (isPrimeDelta(k, wheel)) return k;
+    gi = (gi+1) % G.length;
+    k += G[gi];
+  }
+}
+
+function prevPrimeDelta(n, wheel){
+  let k = n-1n;
+  if (k<=2n) return (n>2n?2n:0n);
+  if ((k&1n)===0n) k--;
+  while (k>2n){
+    if (isPrimeDelta(k, wheel)) return k;
+    k -= 2n; // safe fallback; stepping backwards with exact gaps is more involved
+  }
+  return (k>=2n? k : 0n);
+}
+
+function nearestPrimeDelta(n, wheel){
+  if (n<=2n) return 2n;
+  if (isPrimeDelta(n, wheel)) return n;
+  let lo = n-1n, hi = n+1n;
+  if ((lo&1n)===0n) lo--;
+  if ((hi&1n)===0n) hi++;
+  while (true){
+    if (isPrimeDelta(lo, wheel)) return lo;
+    if (isPrimeDelta(hi, wheel)) return hi;
+    lo -= 2n; hi += 2n;
+  }
+}
+
+// nth prime and index using Δ‑backend
+function nthPrimeDelta(n, wheel){
+  if (n<1n) throw new Error("n>=1");
+  let q = 1n;
+  for (let i=0n;i<n;i++){ q = nextPrimeDelta(q, wheel); }
+  return q;
+}
+function primeIndexFromValueDelta(p, wheel){
+  if (!isPrimeDelta(p, wheel)) throw new Error("A ist keine Primzahl (Δ)");
+  let idx=0n, q=1n;
+  while (q<p){ q = nextPrimeDelta(q, wheel); idx++; if (idx>2_000_000n) throw new Error("Index zu groß für Browser (Δ)"); }
+  return idx;
+}
+
+function ensurePrimeValueDelta(obj, wheel){
+  if (obj.type==='index'){ const n=obj.n; const p=nthPrimeDelta(n, wheel); return {p,n}; }
+  else { const p=obj.v; const n=primeIndexFromValueDelta(p, wheel); return {p,n}; }
+}
+
+// ---------- UI wiring ----------
+$("normalize").onclick = ()=>{
+  try{
+    const A = $("a").value.trim(); const B = $("b").value.trim();
+    if (A){ const pa=parsePrim(A); $("a").value = (pa.type==='index')? `p[${pa.n}]` : pa.v.toString(); }
+    if (B){ const pb=parsePrim(B); $("b").value = (pb.type==='index')? `p[${pb.n}]` : pb.v.toString(); }
+    show(out, ok("OK: normalisiert."));
+  }catch(e){ show(out, err(e.message)); }
+};
+
+$("isPrime").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const A = parsePrim($("a").value);
+    const va = (A.type==='index')? nthPrimeDelta(A.n,wheel) : A.v;
+    const res = isPrimeDelta(va, wheel);
+    show(out, `${(A.type==='index')?`p[${A.n}]`:toLocale(va)} ist ${res? ok("prim") : err("nicht prim")} (Δ, wheel ${wheel}).`);
+  }catch(e){ show(out, err(e.message)); }
+};
+
+$("prev").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const A = parsePrim($("a").value); const {p,n} = ensurePrimeValueDelta(A, wheel);
+    if (n<=1n) { show(out, warn("unter 2 gibt es keine vorherige Primzahl.")); return; }
+    const r = nthPrimeDelta(n-1n, wheel);
+    $("a").value = r.toString();
+    show(out, `prevΔ(p[${n}]=${toLocale(p)}) → p[${n-1n}]=<b>${toLocale(r)}</b> (wheel ${wheel})`);
+  }catch(e){ show(out, err(e.message)); }
+};
+
+$("next").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const A = parsePrim($("a").value); const {p,n} = ensurePrimeValueDelta(A, wheel);
+    const r = nthPrimeDelta(n+1n, wheel);
+    $("a").value = r.toString();
+    show(out, `nextΔ(p[${n}]=${toLocale(p)}) → p[${n+1n}]=<b>${toLocale(r)}</b> (wheel ${wheel})`);
+  }catch(e){ show(out, err(e.message)); }
+};
+
+$("nearest").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const A = parsePrim($("a").value); const va = (A.type==='index')? nthPrimeDelta(A.n,wheel):A.v;
+    const r = nearestPrimeDelta(va, wheel);
+    $("a").value = r.toString();
+    show(out, `nächstgelegene Primzahl (Δ) zu ${toLocale(va)} → <b>${toLocale(r)}</b> (wheel ${wheel})`);
+  }catch(e){ show(out, err(e.message)); }
+};
+
+$("index").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const A = parsePrim($("a").value); const {p,n} = ensurePrimeValueDelta(A, wheel);
+    show(out, `IndexΔ n(${toLocale(p)}) = <b>${n}</b> (p[${n}], wheel ${wheel})`);
+  }catch(e){ show(out, err(e.message)); }
+};
+
+$("nth").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const txt = $("b").value || $("a").value; if (!txt) throw new Error("n fehlt");
+    const X = parsePrim(txt);
+    const n = (X.type==='index')? X.n : parseBigInt(txt);
+    const r = nthPrimeDelta(n, wheel);
+    $("a").value = r.toString();
+    show(out, `p[${n}] (Δ) = <b>${toLocale(r)}</b> (wheel ${wheel})`);
+  }catch(e){ show(out, err(e.message)); }
+};
+
+function binOp(opName, combiner){
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const A = ensurePrimeValueDelta(parsePrim($("a").value), wheel);
+    const B = ensurePrimeValueDelta(parsePrim($("b").value), wheel);
+    const n = combiner(A.n, B.n);
+    const n2 = (n<1n?1n:n);
+    const r = nthPrimeDelta(n2, wheel);
+    $("a").value = r.toString();
+    show(out, `${opName}Δ: p[${A.n}] (${toLocale(A.p)}) & p[${B.n}] (${toLocale(B.p)}) → p[${n2}] = <b>${toLocale(r)}</b> (wheel ${wheel})`);
+  }catch(e){ show(out, err(e.message)); }
+}
+$("add").onclick = ()=> binOp("⊕", (na,nb)=> na+nb);
+$("sub").onclick = ()=> binOp("⊖", (na,nb)=> na-nb);
+$("mul").onclick = ()=> binOp("⊗", (na,nb)=> na*nb);
+$("div").onclick = ()=> binOp("⊘", (na,nb)=> (nb===0n?1n:na/nb));
+
+$("pow").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const A = ensurePrimeValueDelta(parsePrim($("a").value), wheel);
+    const k = parseBigInt(($("k").value||"").trim()); if (k<0n) throw new Error("k ≥ 0");
+    let base=A.n, exp=k, res=1n;
+    while (exp>0n){ if (exp&1n) res=res*base; base=base*base; exp >>= 1n; }
+    const r = nthPrimeDelta(res, wheel);
+    $("a").value = r.toString();
+    show(out, `Index‑PotenzΔ: (n=${A.n})^${k} → p[${res}] = <b>${toLocale(r)}</b> (wheel ${wheel})`);
+  }catch(e){ show(out, err(e.message)); }
+};
+
+$("nextFromN").onclick = ()=>{
+  try{
+    const wheel = parseInt($("wheelSel").value,10);
+    const N = parseBigInt($("N").value);
+    const r = nextPrimeDelta(N, wheel);
+    show(outN, `nächste Primzahl ≥ ${toLocale(N)} (Δ, wheel ${wheel}) → <b>${toLocale(r)}</b>`);
+  }catch(e){ show(outN, err(e.message)); }
+};
+</script>

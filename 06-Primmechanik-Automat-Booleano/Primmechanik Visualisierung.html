@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Δ-Primmechanik Visualisierung</title>
+  <style>
+    body { font-family: sans-serif; background: #f4f4f4; padding: 2em; }
+    h1 { color: #333; }
+    label, input, select, button { margin: 0.5em 0; display: block; }
+    canvas, svg { border: 1px solid #ccc; margin-top: 1em; }
+    #output { margin-top: 2em; }
+  </style>
+</head>
+<body>
+  <h1>Δ-Primmechanik: Interaktive Module</h1>
+  <p>Berechnung und Visualisierung gemäß Jeanette Leues Formeln.</p>
+
+  <label for="start">Startwert n₀:</label>
+  <input type="number" id="start" value="1000">
+
+  <label for="steps">Anzahl Schritte:</label>
+  <input type="number" id="steps" value="64">
+
+  <label for="modul">Modul auswählen:</label>
+  <select id="modul">
+    <option value="impuls">Impulsdiagramm</option>
+    <option value="codon">Codon-Würfel</option>
+    <option value="helix">Helixspirale</option>
+    <option value="knf">KNF-Baum</option>
+  </select>
+
+  <button onclick="zeigeModul()">Visualisieren</button>
+
+  <div id="output"></div>
+
+  <script>
+    function D(n, q) {
+      return n % q === 0 ? 1 : 0;
+    }
+
+    function istRestfrei(n, primfilter) {
+      for (let q of primfilter) {
+        if (D(n, q) === 1) return false;
+      }
+      return true;
+    }
+
+    function f(n, primfilter) {
+      return istRestfrei(n, primfilter) ? 1 : 0;
+    }
+
+    function delta(n, primfilter) {
+      return f(n + 1, primfilter) ^ f(n, primfilter);
+    }
+
+    function zeigeModul() {
+      const start = parseInt(document.getElementById("start").value);
+      const steps = parseInt(document.getElementById("steps").value);
+      const modul = document.getElementById("modul").value;
+      const primfilter = [2, 3, 5];
+      const output = document.getElementById("output");
+      output.innerHTML = "";
+
+      if (modul === "impuls") {
+        const canvas = document.createElement("canvas");
+        canvas.width = 800;
+        canvas.height = 200;
+        const ctx = canvas.getContext("2d");
+        const barWidth = canvas.width / steps;
+        for (let i = 0; i < steps; i++) {
+          const n = start + i;
+          const impulse = delta(n, primfilter);
+          const height = impulse * canvas.height;
+          ctx.fillStyle = impulse ? "#0077cc" : "#ccc";
+          ctx.fillRect(i * barWidth, canvas.height - height, barWidth - 1, height);
+        }
+        output.appendChild(canvas);
+      }
+
+      else if (modul === "codon") {
+        const table = document.createElement("table");
+        table.style.borderCollapse = "collapse";
+        for (let b1 = 0; b1 < 4; b1++) {
+          const row = document.createElement("tr");
+          for (let b2 = 0; b2 < 4; b2++) {
+            for (let b3 = 0; b3 < 4; b3++) {
+              const cell = document.createElement("td");
+              cell.textContent = `(${b1},${b2},${b3})`;
+              cell.style.border = "1px solid #999";
+              cell.style.padding = "4px";
+              cell.style.background = `rgba(${b1*64},${b2*64},${b3*64},0.8)`;
+              row.appendChild(cell);
+            }
+          }
+          table.appendChild(row);
+        }
+        output.appendChild(table);
+      }
+
+      else if (modul === "helix") {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("width", "800");
+        svg.setAttribute("height", "200");
+        for (let i = 0; i < steps; i++) {
+          const t = i / steps * 6.28;
+          const x = 400 + Math.cos(t) * 100;
+          const y = 100 + Math.sin(t) * 50;
+          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", x);
+          circle.setAttribute("cy", y);
+          circle.setAttribute("r", 4);
+          circle.setAttribute("fill", "#0077cc");
+          svg.appendChild(circle);
+        }
+        output.appendChild(svg);
+      }
+
+      else if (modul === "knf") {
+        const ul = document.createElement("ul");
+        for (let i = 0; i < steps; i++) {
+          const n = start + i;
+          const li = document.createElement("li");
+          const knf = primfilter.map(q => `¬D_${q}(${n})`).join(" ∧ ");
+          li.textContent = `f(${n}) = ${f(n, primfilter)} ⇔ ${knf}`;
+          ul.appendChild(li);
+        }
+        output.appendChild(ul);
+      }
+    }
+  </script>
+</body>
+</html>

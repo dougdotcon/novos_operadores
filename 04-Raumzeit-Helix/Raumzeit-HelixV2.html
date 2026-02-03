@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Primzeit ↔ Physik — Duale Welle (Live)</title>
+<style>
+  :root{--fg:#111;--mut:#666;--line:#e6e6e6;--acc:#2c7be5;--red:#e74c3c}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;margin:12px;color:var(--fg)}
+  h1{font-size:1.05rem;margin:0 0 8px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:900px){.row{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .ctrl{display:flex;flex-direction:column;font-size:.9rem}
+  .ctrl input[type=range]{width:100%}
+  .small{font-size:.85rem;color:var(--mut)}
+  .hstack{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{padding:8px 12px;border:0;border-radius:10px;background:var(--fg);color:#fff}
+  button.secondary{background:#f3f3f3;color:#000;border:1px solid var(--line)}
+  label.switch{display:inline-flex;align-items:center;gap:6px}
+  canvas{width:100%;height:250px;border:1px solid var(--line);border-radius:12px;background:#fff}
+  .legend{font-size:.85rem;color:var(--mut);margin:6px 0 0}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#f6f6f6;border:1px solid var(--line);font-size:.8rem}
+</style>
+</head>
+<body>
+  <h1>Primzeit ↔ Physik — Duale Welle (live)</h1>
+
+  <div class="row">
+    <!-- Physische Welle -->
+    <div class="card">
+      <div class="hstack">
+        <span class="pill">oben</span><b>Physische stehende Welle</b> <span class="small">Harmonik n (ungerade Moden wie beim Viertelwellen-Resonator)</span>
+      </div>
+      <canvas id="phys"></canvas>
+      <div class="controls" style="margin-top:10px">
+        <div class="ctrl">
+          <label>Harmonik n <span id="nLab"></span></label>
+          <input id="n" type="range" min="1" max="9" step="1" value="1">
+        </div>
+        <div class="ctrl">
+          <label>Phys. Länge L<sub>phys</sub> (norm.) <span id="LphysLab"></span></label>
+          <input id="Lphys" type="range" min="0.5" max="5" step="0.1" value="2.5">
+        </div>
+        <div class="ctrl">
+          <label>Frequenz f (norm.) <span id="fLab"></span></label>
+          <input id="f" type="range" min="0.1" max="3" step="0.01" value="1.0">
+        </div>
+        <div class="ctrl">
+          <label>Dämpfung phys. ζ <span id="zetaLab"></span></label>
+          <input id="zeta" type="range" min="0" max="0.2" step="0.005" value="0.02">
+        </div>
+      </div>
+      <div class="legend">Form: <code>y(x,t)=A·e^{-ζ t}·sin(k_n x)·cos(2π f t)</code> mit <code>k_n=(2n-1)π/(2 L_phys)</code> (Viertelwelle, ungerade Moden).</div>
+    </div>
+
+    <!-- Primzeit-Welle -->
+    <div class="card">
+      <div class="hstack">
+        <span class="pill">unten</span><b>Primzeit-Welle Y(t)=s·D·C</b> <span class="small">mit Blockspiegelung (rote Linien)</span>
+      </div>
+      <canvas id="prim"></canvas>
+      <div class="controls" style="margin-top:10px">
+        <div class="ctrl">
+          <label>α (Phasenfaktor) <span id="alphaLab"></span></label>
+          <input id="alpha" type="range" min="0.1" max="4" step="0.01" value="1.0">
+        </div>
+        <div class="ctrl">
+          <label>T (Blocklänge) <span id="TLab"></span></label>
+          <input id="T" type="range" min="0.5" max="6.5" step="0.01" value="3.1416">
+        </div>
+        <div class="ctrl">
+          <label>a (Birch-Dämpfung) <span id="aLab"></span></label>
+          <input id="a" type="range" min="0.0" max="3.0" step="0.01" value="1.0">
+        </div>
+        <div class="ctrl">
+          <label>L (Hodge-Höhe) <span id="Llab"></span></label>
+          <input id="L" type="range" min="1" max="10" step="0.1" value="5.0">
+        </div>
+      </div>
+      <div class="hstack" style="margin-top:8px">
+        <label class="switch"><input id="auto" type="checkbox" checked> Auto-Resonanz: setze <code>α·T=(2m+1)π</code></label>
+        <label>m=<input id="m" type="number" value="0" min="0" max="12" style="width:60px;margin-left:6px"></label>
+      </div>
+      <div class="legend">Definition: <code>θ=α t + β</code>, <code>φ=frac(θ/T)</code>, <code>P=φ-1/2</code>, <code>C=1-2|P|</code>,
+        <code>D=1/(1+a α² C²)</code>, <code>s=(-1)^{⌊(t-t₀)/T⌋}</code>, <code>Y=s·D·C</code>. Rote Linien: Blockkanten.</div>
+    </div>
+  </div>
+
+  <!-- Transport -->
+  <div class="card" style="margin-top:12px">
+    <div class="hstack">
+      <button id="play">⏵︎ Play</button>
+      <button id="pause" class="secondary">⏸︎ Pause</button>
+      <label>Tempo <input id="speed" type="range" min="0.2" max="2.0" step="0.05" value="1.0"></label>
+      <span class="small">Tipp: erst „Auto-Resonanz“ aktiv lassen, dann α oder T leicht verschieben und den Unterschied fühlen.</span>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // --- helpers
+  const $ = id => document.getElementById(id);
+  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+  const frac = x => x - Math.floor(x);
+  const tanh = x => { const e2=Math.exp(2*x); return (e2-1)/(e2+1); };
+
+  // canvases
+  const cPhys = $("phys"), gPhys = cPhys.getContext("2d");
+  const cPrim = $("prim"), gPrim = cPrim.getContext("2d");
+
+  // controls
+  const nEl=$("n"), LphysEl=$("Lphys"), fEl=$("f"), zetaEl=$("zeta");
+  const alphaEl=$("alpha"), TEl=$("T"), aEl=$("a"), LEl=$("L");
+  const autoEl=$("auto"), mEl=$("m");
+  const playEl=$("play"), pauseEl=$("pause"), speedEl=$("speed");
+
+  // labels
+  const nLab=$("nLab"), LphysLab=$("LphysLab"), fLab=$("fLab"), zetaLab=$("zetaLab");
+  const alphaLab=$("alphaLab"), TLab=$("TLab"), aLab=$("aLab"), Llab=$("Llab");
+
+  // state
+  let running=true, tGlobal=0;
+
+  // sizing for crisp lines
+  function hiDPICanvas(canvas, w, h){
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(w*dpr);
+    canvas.height= Math.floor(h*dpr);
+    canvas.style.width = w+"px";
+    canvas.style.height= h+"px";
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return ctx;
+  }
+  // initial size (responsive-ish)
+  function sizeCanvases(){
+    const W = cPhys.clientWidth || 600;
+    hiDPICanvas(cPhys, W, 250);
+    hiDPICanvas(cPrim, W, 250);
+  }
+  sizeCanvases(); window.addEventListener("resize", sizeCanvases);
+
+  // draw axes helper
+  function drawAxes(ctx, xmin,xmax,ymin,ymax, pad=30){
+    const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight;
+    const X = u => pad + (u - xmin)/(xmax - xmin)*(W-2*pad);
+    const Y = v => H - pad - (v - ymin)/(ymax - ymin)*(H-2*pad);
+    ctx.strokeStyle="#e6e6e6"; ctx.lineWidth=1;
+    // axes
+    ctx.beginPath(); ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad, pad); ctx.lineTo(pad, H-pad); ctx.stroke();
+    return {X,Y,W,H,pad};
+  }
+
+  // physical wave draw
+  function drawPhysical(t){
+    const n = parseInt(nEl.value,10);
+    const Lp= parseFloat(LphysEl.value);
+    const f = parseFloat(fEl.value);
+    const z = parseFloat(zetaEl.value);
+
+    nLab.textContent = `= ${n}`;
+    LphysLab.textContent = `= ${Lp.toFixed(2)}`;
+    fLab.textContent = `= ${f.toFixed(2)} Hz`;
+    zetaLab.textContent = `= ${z.toFixed(3)}`;
+
+    const ctx = gPhys; ctx.clearRect(0,0,ctx.canvas.clientWidth,ctx.canvas.clientHeight);
+    const xmin=0, xmax=Lp, ymin=-1.2, ymax=1.2;
+    const {X,Y,W,H,pad} = drawAxes(ctx,xmin,xmax,ymin,ymax);
+
+    // standing wave: y(x,t)=A e^{-ζt} sin(kx) cos(2π f t), k=(2n-1)π/(2L)
+    const k = (2*n-1)*Math.PI/(2*Lp);
+    const A = 1.0;
+    const damp = Math.exp(-z*t);
+    ctx.strokeStyle="#111"; ctx.lineWidth=1.8;
+    ctx.beginPath();
+    const N=400;
+    for(let i=0;i<=N;i++){
+      const x = xmin + (xmax-xmin)*i/N;
+      const y = A*damp*Math.sin(k*x)*Math.cos(2*Math.PI*f*t);
+      if(i===0) ctx.moveTo(X(x),Y(y)); else ctx.lineTo(X(x),Y(y));
+    }
+    ctx.stroke();
+
+    // boundary markers
+    ctx.fillStyle="#666"; ctx.font="12px system-ui";
+    ctx.fillText("x=0 (geschl.)", pad, 16);
+    ctx.fillText(`x=L=${Lp.toFixed(2)} (offen)`, W-120, 16);
+  }
+
+  // prim wave compute Y(t) at time t
+  function primY(t, params){
+    const {alpha,beta,T,a,L,t0} = params;
+    const theta = alpha*t + beta;
+    const phi = ( (theta/T) - Math.floor(theta/T) );
+    const P = phi - 0.5;
+    const C = 1 - 2*Math.abs(P);
+    const D = 1 / (1 + a*alpha*alpha*C*C);
+    const blk = Math.floor((t - t0)/T);
+    const s = (blk % 2 === 0) ? +1 : -1;
+    // z(t) optional: L*tanh(t/L) (nicht gezeichnet, aber vorhanden)
+    return {Y: s*D*C, C, D, s, blk};
+  }
+
+  // draw prim wave as scrolling strip
+  function drawPrim(t0){
+    // params + optional auto-resonance
+    let alpha=parseFloat(alphaEl.value);
+    let T=parseFloat(TEl.value);
+    const a=parseFloat(aEl.value);
+    const L=parseFloat(LEl.value);
+    const m=parseInt(mEl.value,10);
+    const beta=0.0, t00=0.0;
+
+    if(autoEl.checked){
+      // αT = (2m+1)π  => setze T entsprechend aktueller α
+      T = ( (2*m+1)*Math.PI ) / alpha;
+      TEl.value = T.toFixed(5);
+    }
+
+    alphaLab.textContent=`= ${alpha.toFixed(2)}`;
+    TLab.textContent    =`= ${T.toFixed(3)}`;
+    aLab.textContent    =`= ${a.toFixed(2)}`;
+    Llab.textContent    =`= ${L.toFixed(1)}`;
+
+    const ctx = gPrim; ctx.clearRect(0,0,ctx.canvas.clientWidth,ctx.canvas.clientHeight);
+    const tWin = 6*T;               // Fensterbreite in "Zeit"
+    const tStart = t0;              // linke Kante
+    const tEnd = tStart + tWin;     // rechte Kante
+    const ymin=-1.2, ymax=1.2;
+    const {X,Y,W,H,pad} = drawAxes(ctx, tStart, tEnd, ymin, ymax);
+
+    // grid every T/2
+    ctx.strokeStyle="#f0f0f0";
+    ctx.lineWidth=1;
+    const step = T/2;
+    for(let tt=Math.ceil(tStart/step)*step; tt<tEnd; tt+=step){
+      const x = X(tt);
+      ctx.beginPath(); ctx.moveTo(x,pad); ctx.lineTo(x,H-pad); ctx.stroke();
+    }
+
+    // block edges (rot)
+    ctx.strokeStyle= "#e74c3c";
+    ctx.lineWidth=1.2;
+    for(let tb=Math.ceil((tStart)/T)*T; tb<tEnd; tb+=T){
+      const x = X(tb);
+      ctx.beginPath(); ctx.moveTo(x,pad); ctx.lineTo(x,H-pad); ctx.stroke();
+    }
+
+    // plot Y(t)
+    ctx.strokeStyle="#111"; ctx.lineWidth=1.8;
+    ctx.beginPath();
+    const N=800;
+    for(let i=0;i<=N;i++){
+      const tt = tStart + (tWin)*i/N;
+      const yy = primY(tt, {alpha,beta,T,a,L,t0:t00}).Y;
+      if(i===0) ctx.moveTo(X(tt),Y(yy)); else ctx.lineTo(X(tt),Y(yy));
+    }
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle="#666"; ctx.font="12px system-ui";
+    ctx.fillText(`Fenster: t ∈ [${tStart.toFixed(2)}, ${tEnd.toFixed(2)}]`, pad, 16);
+    ctx.fillText(`Resonanzlinien: bei αT=(2m+1)π → aktuell m=${m}`, pad+200, 16);
+  }
+
+  // animation loop
+  let lastTS = performance.now();
+  function tick(ts){
+    if(!running){ requestAnimationFrame(tick); return; }
+    const dt = (ts - lastTS)/1000; lastTS = ts;
+    const speed = parseFloat(speedEl.value);
+    tGlobal += dt*speed;
+
+    drawPhysical(tGlobal);
+    drawPrim(tGlobal);
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // events
+  [nEl,LphysEl,fEl,zetaEl, alphaEl,TEl,aEl,LEl, autoEl,mEl, speedEl].forEach(el=>{
+    el.addEventListener("input", ()=>{ /* immediate redraw next tick */ });
+  });
+  playEl.addEventListener("click", ()=>{ running=true; lastTS=performance.now(); });
+  pauseEl.addEventListener("click", ()=>{ running=false; });
+
+  // initial labels
+  drawPhysical(0); drawPrim(0);
+})();
+</script>
+</body>
+</html>

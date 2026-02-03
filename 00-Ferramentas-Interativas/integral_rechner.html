@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"/>
+<title>Integral-Rechner (Adaptive Simpson · Tick/Classic)</title>
+<style>
+  :root{--bg:#0b0c10;--card:#151821;--ink:#e8eaf0;--muted:#aeb4c2;--hl:#7dd3fc}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  .wrap{max-width:900px;margin:18px auto;padding:14px}
+  .card{background:var(--card);border-radius:14px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.25)}
+  h1{font-size:1.15rem;margin:0 0 10px}
+  .grid{display:grid;gap:10px}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  label{display:block;color:var(--muted);font-size:.9rem;margin-bottom:4px}
+  input,select,button{width:100%;border-radius:10px;border:1px solid #2a3140;background:#0f1219;color:var(--ink);padding:9px}
+  button{cursor:pointer}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .out{background:#0f1320;border:1px solid #283044;border-radius:10px;padding:10px;white-space:pre-wrap}
+  small{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Integral-Rechner</h1>
+    <div class="grid g3">
+      <div>
+        <label>Integrand f(x)</label>
+        <input id="expr" class="mono" value="sin(x) / (1 + x*x)"/>
+        <small>Funktionen: sin, cos, tan, exp, log (ln), sqrt, abs, min, max, pow(a,b).<br/>Classic: rad; Tick: sin/cos über N Ticks (π-frei).</small>
+      </div>
+      <div>
+        <label>Untere Grenze a</label>
+        <input id="a" class="mono" value="0"/>
+      </div>
+      <div>
+        <label>Obere Grenze b</label>
+        <input id="b" class="mono" value="3"/>
+      </div>
+    </div>
+
+    <div class="grid g4" style="margin-top:8px">
+      <div>
+        <label>Methode</label>
+        <select id="method">
+          <option value="adaptive">Adaptive Simpson (Standard)</option>
+          <option value="simpson">Simpson (N gerade)</option>
+          <option value="trapezoid">Trapezregel</option>
+        </select>
+      </div>
+      <div>
+        <label>Modus (Trig)</label>
+        <select id="mode">
+          <option value="classic">Classic (rad)</option>
+          <option value="tick">Tick (π-frei)</option>
+        </select>
+      </div>
+      <div>
+        <label>Toleranz / N</label>
+        <input id="tolN" class="mono" value="1e-8"/>
+        <small>Adaptive: Toleranz · Simpson/Trapez: N (z. B. 2000)</small>
+      </div>
+      <div>
+        <label>Ticks N (nur Tick-Modus)</label>
+        <input id="NT" class="mono" value="1024"/>
+        <small>Vollkreis = N Ticks → sin/cos aus LUT</small>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <button id="go">∫ f(x) dx berechnen</button>
+      <button id="ex1">Beispiel 1</button>
+      <button id="ex2">Beispiel 2</button>
+      <button id="ex3">Beispiel 3</button>
+    </div>
+
+    <div class="out mono" id="out" style="margin-top:10px">Bereit.</div>
+  </div>
+</div>
+
+<script>
+// ---------- Tick-Trig: π-frei LUT ----------
+function makeTickTrig(N){
+  N = Math.max(16, Math.floor(N));
+  // LUT einmalig aufbauen (mit PI zur INITIALISIERUNG erlaubt), Laufzeit π-frei via Lookup
+  const SIN = new Float64Array(N), COS = new Float64Array(N);
+  for(let k=0;k<N;k++){
+    const a = 2*Math.PI*k/N;
+    SIN[k]=Math.sin(a); COS[k]=Math.cos(a);
+  }
+  const mod = t => ((t%N)+N)%N;
+  const sin = x => SIN[mod(Math.floor(x))];
+  const cos = x => COS[mod(Math.floor(x))];
+  const tan = x => sin(x)/cos(x);
+  return {sin,cos,tan,N};
+}
+
+// ---------- Ausdruck kompiliert als Funktion f(x) ----------
+function compileExpr(expr, mode, tick){
+  // kleine Normalisierung
+  let E = expr.replace(/\^/g,"**")
+              .replace(/\bln\(/g,"log(");
+  // erlaubte Namen auf unsere Implementierungen binden
+  const env = {
+    sin: (t)=> mode==='tick' ? tick.sin(t) : Math.sin(t),
+    cos: (t)=> mode==='tick' ? tick.cos(t) : Math.cos(t),
+    tan: (t)=> mode==='tick' ? tick.tan(t) : Math.tan(t),
+    exp: Math.exp, log: Math.log, sqrt: Math.sqrt, abs: Math.abs,
+    min: Math.min, max: Math.max, pow: Math.pow,
+    pi: Math.PI, e: Math.E, N: tick.N // N (Ticks) als Konstante verfügbar
+  };
+  // Sicherheits-Note: läuft lokal. Wir erlauben nur obige Namen + x, Zahlen, (), +-* etc.
+  const fn = new Function('x','sin','cos','tan','exp','log','sqrt','abs','min','max','pow','pi','e','N', `return (${E});`);
+  return x => fn(x, env.sin, env.cos, env.tan, env.exp, env.log, env.sqrt, env.abs, env.min, env.max, env.pow, env.pi, env.e, env.N);
+}
+
+// ---------- Quadratur-Kerne ----------
+function trap(f,a,b,N){
+  N = Math.max(1, Math.floor(N));
+  const h = (b-a)/N;
+  let s = 0.5*(f(a)+f(b));
+  for(let i=1;i<N;i++) s += f(a+i*h);
+  return s*h;
+}
+function simpson(f,a,b,N){
+  N = Math.max(2, Math.floor(N)); if(N%2) N++;
+  const h = (b-a)/N;
+  let s = f(a)+f(b);
+  for(let i=1;i<N;i++){
+    s += (i%2? 4:2)*f(a+i*h);
+  }
+  return s*h/3;
+}
+function adaptiveSimpson(f,a,b,eps,maxDepth=20){
+  function S(f,a,b){ const c=(a+b)/2, h=b-a; return (h/6)*(f(a)+4*f(c)+f(b)); }
+  const whole = S(f,a,b);
+  function recur(a,b,eps,depth,fa,fc,fb, Sab){
+    const c=(a+b)/2;
+    const d=(a+c)/2, e=(c+b)/2;
+    const fd=f(d), fe=f(e);
+    const Sab_left  = (c-a)/6*(fa + 4*fd + fc);
+    const Sab_right = (b-c)/6*(fc + 4*fe + fb);
+    const Sab2 = Sab_left + Sab_right;
+    if(depth<=0 || Math.abs(Sab2 - Sab) <= 15*eps){
+      return Sab2 + (Sab2 - Sab)/15;
+    }
+    return recur(a,c,eps/2,depth-1,fa,fd,fc,Sab_left) +
+           recur(c,b,eps/2,depth-1,fc,fe,fb,Sab_right);
+  }
+  const fa=f(a), fb=f(b), fc=f((a+b)/2);
+  return recur(a,b,eps,maxDepth,fa,fc,fb,whole);
+}
+
+// ---------- UI ----------
+const $ = id=>document.getElementById(id);
+function run(){
+  const expr = $('expr').value.trim();
+  const a = Number($('a').value), b = Number($('b').value);
+  const method = $('method').value;
+  const mode = $('mode').value;
+  const tolN = $('tolN').value.trim();
+  const NT = Number($('NT').value);
+
+  const tick = makeTickTrig(isFinite(NT)?NT:1024);
+  const f = compileExpr(expr, mode, tick);
+
+  const t0 = performance.now();
+  let val=NaN, info='';
+  try{
+    if(method==='adaptive'){
+      const tol = Number(tolN)||1e-8;
+      val = adaptiveSimpson(f,a,b,tol);
+      info = `Methode: Adaptive Simpson · Toleranz=${tol}`;
+    }else if(method==='simpson'){
+      const N = Math.max(2, Math.floor(Number(tolN)||1000));
+      val = simpson(f,a,b,N);
+      info = `Methode: Simpson · N=${N} (gerade)`;
+    }else{
+      const N = Math.max(1, Math.floor(Number(tolN)||2000));
+      val = trap(f,a,b,N);
+      info = `Methode: Trapezregel · N=${N}`;
+    }
+  }catch(e){
+    $('out').textContent = `Fehler beim Auswerten: ${e.message}`;
+    return;
+  }
+  const t1 = performance.now();
+  $('out').textContent =
+`∫[${a}, ${b}] f(x) dx
+f(x) = ${expr}
+Modus: ${mode==='tick'?'Tick (π-frei)':'Classic (rad)'}
+${info}
+Ergebnis: ${val}
+Zeit: ${(t1-t0).toFixed(3)} ms`;
+}
+
+// Beispiele
+$('ex1').onclick = ()=>{
+  $('expr').value = 'exp(-x*x)'; $('a').value='-2'; $('b').value='2'; $('method').value='adaptive';
+  $('mode').value='classic'; $('tolN').value='1e-8'; run();
+};
+$('ex2').onclick = ()=>{
+  $('expr').value = 'sin(x)/(1+x*x)'; $('a').value='0'; $('b').value='8';
+  $('method').value='simpson'; $('mode').value='tick'; $('tolN').value='2000'; $('NT').value='2048'; run();
+};
+$('ex3').onclick = ()=>{
+  $('expr').value = 'sqrt(1-x*x)'; $('a').value='0'; $('b').value='1';
+  $('method').value='adaptive'; $('mode').value='classic'; $('tolN').value='1e-9'; run();
+};
+$('go').onclick = run;
+
+// Init
+</script>
+</body>
+</html>

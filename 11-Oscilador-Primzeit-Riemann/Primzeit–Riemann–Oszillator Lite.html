@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Primzeit–Riemann–Oszillator Lite</title>
+  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background:#f0f2f5; padding:20px; }
+    .box { background:white; padding:20px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.1); max-width:900px; margin:auto; }
+    h2 { text-align:center; color:#2c3e50; }
+    label { font-weight:bold; margin-top:10px; display:block; }
+    input[type=range]{width:100%;}
+    button { margin-top:15px; padding:10px; background:#27ae60; color:white; border:none; border-radius:5px; font-size:16px; width:100%; }
+    #status { margin-top:10px; font-style:italic; color:#555; }
+    .plot { height:350px; margin-top:20px; }
+    table { border-collapse:collapse; width:100%; margin-top:20px; text-align:center; }
+    th,td { border:1px solid #ddd; padding:6px; }
+    th { background:#2c3e50; color:white; }
+    td { background:#fafafa; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <h2>Primzeit–Riemann–Oszillator Lite</h2>
+  <p>Simulation der Resonanzen – kompakte Version</p>
+
+  <label>Matrixgröße N: <span id="n-val">40</span></label>
+  <input type="range" id="slider-n" min="20" max="80" value="40" oninput="document.getElementById('n-val').innerText=this.value">
+
+  <label>Kopplung α: <span id="c-val">1.0</span></label>
+  <input type="range" id="slider-c" min="0" max="3" step="0.1" value="1.0" oninput="document.getElementById('c-val').innerText=this.value">
+
+  <button onclick="run()">▶ Simulation starten</button>
+  <div id="status">Bereit.</div>
+
+  <div id="plot1" class="plot"></div>
+  <div id="plot2" class="plot"></div>
+
+  <h3>Vergleich mit Zeta-Nullstellen</h3>
+  <table id="zero-table"></table>
+</div>
+
+<script>
+// --- Hilfsfunktionen ---
+function getPrimes(n){
+  const s=new Uint8Array(n+1).fill(1);s[0]=s[1]=0;
+  for(let i=2;i*i<=n;i++) if(s[i]) for(let j=i*i;j<=n;j+=i) s[j]=0;
+  return [...s.keys()].filter(i=>s[i]);
+}
+function buildMatrix(N,alpha){
+  let t=[];for(let i=1;i<=N;i++) t.push(i*Math.log(i+1));
+  let H=Array.from({length:N},()=>new Float64Array(N).fill(0));
+  // Laplace-Kern
+  for(let i=0;i<N-1;i++){let dt=t[i+1]-t[i];let v=1/(dt*dt);
+    H[i][i]+=2*v;H[i+1][i+1]+=2*v;H[i][i+1]-=v;H[i+1][i]-=v;}
+  // Potential
+  for(let i=0;i<N;i++) H[i][i]+=1/Math.log(t[i]+2);
+  // Prim-Störung
+  for(let p of getPrimes(N)){let logp=Math.log(p);let w=alpha*logp/Math.sqrt(p);
+    for(let i=0;i<N;i++)for(let j=0;j<i;j++){
+      let dist=Math.abs(t[i]-t[j]);
+      if(Math.abs(dist-logp)<0.4){H[i][j]+=w;H[j][i]+=w;}
+    }}
+  return H;
+}
+// sehr einfache Eigenwertschätzung (Diagonale dominiert)
+function eigenvalues(H){return H.map((row,i)=>row[i]).sort((a,b)=>a-b);}
+
+function run(){
+  document.getElementById('status').innerText="Rechne...";
+  setTimeout(()=>{
+    let N=parseInt(document.getElementById('slider-n').value);
+    let alpha=parseFloat(document.getElementById('slider-c').value);
+    let H=buildMatrix(N,alpha);
+    let evals=eigenvalues(H);
+
+    // --- GUE Statistik ---
+    let diffs=[];for(let i=0;i<evals.length-1;i++){let d=evals[i+1]-evals[i];if(d>0.01) diffs.push(d);}
+    let mean=diffs.reduce((a,b)=>a+b,0)/diffs.length;
+    let s=diffs.map(d=>d/mean);
+    let x=[],y=[];for(let i=0;i<=40;i++){let v=i/10;x.push(v);y.push((32/Math.PI**2)*v*v*Math.exp(-4*v*v/Math.PI));}
+    Plotly.newPlot('plot1',[
+      {x:s,type:'histogram',histnorm:'probability density',name:'Simulation',marker:{color:'#1f77b4'}},
+      {x:x,y:y,type:'scatter',mode:'lines',name:'GUE Theorie',line:{color:'red'}}
+    ],{title:'Chaos-Statistik (GUE)',xaxis:{title:'Abstand s'}});
+
+    // --- Heatmap ---
+    let idx=Array.from({length:evals.length},(_,i)=>i+1);
+    Plotly.newPlot('plot2',[{x:idx,y:evals,z:evals,type:'heatmap',colorscale:'Viridis'}],
+      {title:'Eigenwert-Dichte Heatmap',xaxis:{title:'Index n'},yaxis:{title:'Eigenwert λ'}});
+
+    // --- Nullstellenvergleich ---
+    const trueZeros=[14.1347,21.0220,25.0108,30.4248,32.9350,37.5861,40.9187,43.3270,48.0051,49.7738];
+    let tbl="<tr><th>n</th><th>γₙ (Zeta)</th><th>λₙ (Simulation)</th><th>Δ</th></tr>";
+    for(let i=0;i<trueZeros.length;i++){
+      let sim=evals[i]||NaN;let delta=sim-trueZeros[i];
+      tbl+=`<tr><td>${i+1}</td><td>${trueZeros[i].toFixed(4)}</td><td>${sim.toFixed(4)}</td><td>${delta.toFixed(4)}</td></tr>`;
+    }
+    document.getElementById('zero-table').innerHTML=tbl;
+
+    document.getElementById('status').innerText="Fertig!";
+  },50);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Δ-Primmechanik als Boolescher Automat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #64748b;
+            font-size: 1rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #475569;
+        }
+        
+        input[type="number"] {
+            width: 100px;
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        input[type="range"] {
+            width: 150px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+        
+        .btn-success {
+            background: #16a34a;
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background: #15803d;
+        }
+        
+        .btn-secondary {
+            background: #475569;
+            color: white;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #334155;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        
+        .state-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        
+        .state-box {
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .state-box.blue {
+            background: #dbeafe;
+        }
+        
+        .state-box.purple {
+            background: #f3e8ff;
+        }
+        
+        .state-box.green {
+            background: #dcfce7;
+        }
+        
+        .state-label {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+        
+        .state-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .state-value.blue { color: #2563eb; }
+        .state-value.purple { color: #9333ea; }
+        .state-value.green { color: #16a34a; }
+        
+        .state-note {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        
+        .boolean-ops {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+        }
+        
+        .boolean-ops div {
+            margin-bottom: 8px;
+        }
+        
+        .boolean-ops .separator {
+            border-top: 1px solid #cbd5e1;
+            padding-top: 8px;
+            margin-top: 8px;
+        }
+        
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.875rem;
+            border-left: 4px solid #3b82f6;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        
+        .history-num {
+            font-family: monospace;
+            font-weight: bold;
+            color: #2563eb;
+            min-width: 40px;
+        }
+        
+        .history-arrow {
+            color: #cbd5e1;
+        }
+        
+        .history-delta {
+            color: #16a34a;
+            font-weight: bold;
+        }
+        
+        .history-result {
+            font-family: monospace;
+            font-weight: bold;
+        }
+        
+        .history-result.prime {
+            color: #9333ea;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        
+        .badge.prime {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+        
+        .badge.impulse {
+            background: #fed7aa;
+            color: #c2410c;
+        }
+        
+        .badge.no-impulse {
+            background: #e2e8f0;
+            color: #64748b;
+        }
+        
+        .legend {
+            margin-top: 24px;
+            padding: 16px;
+            background: #f1f5f9;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        
+        .legend h3 {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        .mono {
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Δ-Primmechanik als Boolescher Automat</h1>
+            <div class="subtitle">Visualisierung der logischen Zustandsübergänge: n → n + Δ</div>
+        </div>
+
+        <!-- Steuerung -->
+        <div class="card">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="startValue">Start n₀:</label>
+                    <input type="number" id="startValue" value="150">
+                </div>
+                
+                <div class="control-group">
+                    <label for="speed">Geschwindigkeit:</label>
+                    <input type="range" id="speed" min="200" max="2000" step="200" value="1000">
+                    <span id="speedLabel">1000ms</span>
+                </div>
+
+                <div class="button-group">
+                    <button id="playBtn" class="btn-primary">
+                        <span>▶</span> Start
+                    </button>
+                    <button id="stepBtn" class="btn-success">
+                        <span>→</span> Schritt
+                    </button>
+                    <button id="resetBtn" class="btn-secondary">
+                        <span>↻</span> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aktueller Zustand -->
+        <div class="card">
+            <div class="card-title">Aktueller Zustand</div>
+            <div class="state-grid">
+                <div class="state-box blue">
+                    <div class="state-label">Position n</div>
+                    <div class="state-value blue" id="currentN">150</div>
+                </div>
+                <div class="state-box purple">
+                    <div class="state-label">Primzustand f(n)</div>
+                    <div class="state-value purple" id="currentF">0</div>
+                    <div class="state-note" id="currentPrimeNote">nicht prim</div>
+                </div>
+                <div class="state-box green">
+                    <div class="state-label">Nächster Δ-Schritt</div>
+                    <div class="state-value green" id="currentDelta">7</div>
+                    <div class="state-note">gcd(n+Δ, n) = 1</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Boolesche Operationen -->
+        <div class="card" id="booleanCard" style="display: none;">
+            <div class="card-title">Boolesche Operationen (letzter Schritt)</div>
+            <div class="boolean-ops" id="booleanOps"></div>
+        </div>
+
+        <!-- Verlauf -->
+        <div class="card" id="historyCard" style="display: none;">
+            <div class="card-title">Δ-Pfad (Zustandsübergänge)</div>
+            <div id="historyList"></div>
+        </div>
+
+        <!-- Legende -->
+        <div class="legend">
+            <h3>Notation:</h3>
+            <div class="legend-grid">
+                <div><span class="mono">f(n)</span> = Primzustand (1=prim, 0=nicht prim)</div>
+                <div><span class="mono">δ(n)</span> = Impuls (XOR-Zustandsänderung)</div>
+                <div><span class="mono">Δ</span> = kleinster Schritt mit gcd(n+Δ, n)=1</div>
+                <div><span class="mono">⊕</span> = XOR (exklusives ODER)</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Zustandsvariablen
+        let currentN = 150;
+        let history = [];
+        let isRunning = false;
+        let timer = null;
+        let speed = 1000;
+
+        // DOM-Elemente
+        const startValueInput = document.getElementById('startValue');
+        const speedInput = document.getElementById('speed');
+        const speedLabel = document.getElementById('speedLabel');
+        const playBtn = document.getElementById('playBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const currentNEl = document.getElementById('currentN');
+        const currentFEl = document.getElementById('currentF');
+        const currentPrimeNoteEl = document.getElementById('currentPrimeNote');
+        const currentDeltaEl = document.getElementById('currentDelta');
+        const booleanCard = document.getElementById('booleanCard');
+        const booleanOps = document.getElementById('booleanOps');
+        const historyCard = document.getElementById('historyCard');
+        const historyList = document.getElementById('historyList');
+
+        // Hilfsfunktionen
+        function isPrime(num) {
+            if (num < 2) return false;
+            if (num === 2) return true;
+            if (num % 2 === 0) return false;
+            for (let i = 3; i <= Math.sqrt(num); i += 2) {
+                if (num % i === 0) return false;
+            }
+            return true;
+        }
+
+        function gcd(a, b) {
+            while (b !== 0) {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            return a;
+        }
+
+        function findDelta(n) {
+            for (let d = 2; d < 200; d++) {
+                if (gcd(n + d, n) === 1) {
+                    return d;
+                }
+            }
+            return 1;
+        }
+
+        function updateDisplay() {
+            currentNEl.textContent = currentN;
+            const f = isPrime(currentN) ? 1 : 0;
+            currentFEl.textContent = f;
+            currentPrimeNoteEl.textContent = f === 1 ? 'PRIM' : 'nicht prim';
+            currentDeltaEl.textContent = findDelta(currentN);
+        }
+
+        function step() {
+            const from = currentN;
+            const delta = findDelta(from);
+            const to = from + delta;
+            const fFrom = isPrime(from) ? 1 : 0;
+            const fTo = isPrime(to) ? 1 : 0;
+            const impulse = fFrom ^ fTo;
+
+            history.push({
+                from, delta, to,
+                fFrom, fTo, impulse,
+                isPrime: fTo === 1
+            });
+            currentN = to;
+            updateDisplay();
+            updateBooleanOps();
+            updateHistory();
+
+            if (history.length >= 15) {
+                stopRunning();
+            }
+        }
+
+        function updateBooleanOps() {
+            if (history.length === 0) return;
+            
+            booleanCard.style.display = 'block';
+            const last = history[history.length - 1];
+            
+            booleanOps.innerHTML = `
+                <div><span style="color: #64748b;">f(${last.from}) = </span><span style="color: #2563eb; font-weight: bold;">${last.fFrom}</span></div>
+                <div><span style="color: #64748b;">f(${last.to}) = </span><span style="color: #9333ea; font-weight: bold;">${last.fTo}</span></div>
+                <div class="separator">
+                    <span style="color: #64748b;">δ(${last.from}) = f(${last.to}) ⊕ f(${last.from}) = </span>
+                    <span style="color: #ea580c; font-weight: bold;">${last.fTo} ⊕ ${last.fFrom} = ${last.impulse}</span>
+                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">
+                        ${last.impulse === 1 ? '→ Zustandswechsel (0↔1)' : '→ Keine Änderung'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateHistory() {
+            if (history.length === 0) return;
+            
+            historyCard.style.display = 'block';
+            historyList.innerHTML = history.map((h, i) => `
+                <div class="history-item">
+                    <span class="history-num">#${i + 1}</span>
+                    <span class="mono">${h.from}</span>
+                    <span class="history-arrow">→</span>
+                    <span class="history-delta">+${h.delta}</span>
+                    <span class="history-arrow">→</span>
+                    <span class="mono history-result ${h.isPrime ? 'prime' : ''}">${h.to}</span>
+                    ${h.isPrime ? '<span class="badge prime">PRIM</span>' : ''}
+                    <span style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.75rem; color: #64748b;">f: ${h.fFrom}→${h.fTo}</span>
+                        <span class="badge ${h.impulse === 1 ? 'impulse' : 'no-impulse'}">δ=${h.impulse}</span>
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function startRunning() {
+            if (history.length >= 15) return;
+            isRunning = true;
+            playBtn.innerHTML = '<span>⏸</span> Pause';
+            stepBtn.disabled = true;
+            startValueInput.disabled = true;
+            runLoop();
+        }
+
+        function stopRunning() {
+            isRunning = false;
+            playBtn.innerHTML = '<span>▶</span> Start';
+            stepBtn.disabled = history.length >= 15;
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+        }
+
+        function runLoop() {
+            if (!isRunning || history.length >= 15) {
+                stopRunning();
+                return;
+            }
+            step();
+            timer = setTimeout(runLoop, speed);
+        }
+
+        function reset() {
+            stopRunning();
+            currentN = parseInt(startValueInput.value) || 150;
+            history = [];
+            booleanCard.style.display = 'none';
+            historyCard.style.display = 'none';
+            updateDisplay();
+            startValueInput.disabled = false;
+            stepBtn.disabled = false;
+        }
+
+        // Event-Listener
+        speedInput.addEventListener('input', (e) => {
+            speed = parseInt(e.target.value);
+            speedLabel.textContent = speed + 'ms';
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (isRunning) {
+                stopRunning();
+            } else {
+                startRunning();
+            }
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (history.length < 15) {
+                step();
+            }
+        });
+
+        resetBtn.addEventListener('click', reset);
+
+        startValueInput.addEventListener('change', (e) => {
+            if (history.length === 0) {
+                currentN = parseInt(e.target.value) || 150;
+                updateDisplay();
+            }
+        });
+
+        // Initialisierung
+        updateDisplay();
+    </script>
+</body>
+</html>
